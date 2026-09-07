@@ -1,0 +1,591 @@
+{% extends "base.html" %}
+{% block title %}{{ query_id }} Forensics{% endblock %}
+{% block page_title %}Query Forensic Analysis: {{ query_id }}{% endblock %}
+{% block breadcrumb %}Forensics · {{ query_label }}{% endblock %}
+
+{% block content %}
+
+<!-- Header & High-Level Summary Card -->
+<div class="card mb-20" style="border-left:4px solid {% if forensics.sec_b.severity == 'CRITICAL' %}var(--critical){% elif forensics.sec_b.severity == 'HIGH' %}var(--high){% elif forensics.sec_b.severity == 'MEDIUM' %}var(--medium){% else %}var(--ok){% endif %};background:var(--bg-card)">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+        <span class="mono" style="font-size:1.3rem;font-weight:800;color:var(--text-primary)">{{ query_id }}</span>
+        <span class="badge badge-{{ forensics.sec_b.severity | lower }}" style="font-size:0.8rem;padding:3px 8px">{{ forensics.sec_b.severity }}</span>
+        {% if forensics.sec_a.is_double_booking %}
+        <span class="badge" style="background:rgba(239,68,68,0.2);color:#fca5a5;border:1px solid #ef4444;font-size:0.75rem;padding:3px 8px">
+          🔒 Double-Booking Sensitive
+        </span>
+        {% endif %}
+      </div>
+      <div class="text-muted" style="font-size:0.95rem;margin-bottom:4px">{{ query_label }}</div>
+      <div class="text-xs text-dim">{{ forensics.sec_a.description }}</div>
+    </div>
+    <div style="text-align:right">
+      <div class="text-xs text-dim">Regression Score</div>
+      <div style="font-size:1.8rem;font-weight:800;color:{% if forensics.sec_j.total_score >= 80 %}var(--critical){% elif forensics.sec_j.total_score >= 50 %}var(--high){% elif forensics.sec_j.total_score >= 25 %}var(--medium){% else %}var(--ok){% endif %}">
+        {{ forensics.sec_j.total_score }} <span style="font-size:0.9rem;color:var(--text-dim)">/ 100</span>
+      </div>
+      <div class="text-xs" style="color:var(--text-dim)">Priority: <strong>{{ forensics.sec_j.priority }}</strong></div>
+    </div>
+  </div>
+</div>
+
+<!-- Prominent "WHAT CHANGED?" Card -->
+<div class="card mb-20" style="background:linear-gradient(135deg, rgba(99,102,241,0.08), rgba(6,182,212,0.05));border:1px solid var(--border);border-left:4px solid var(--accent)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px">
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:1.2rem">🔍</span>
+      <span style="font-weight:700;font-size:1rem;color:var(--text-primary)">WHAT CHANGED? (Root Cause Summary)</span>
+    </div>
+    <span class="badge {% if forensics.sec_k.evidence_strength == 'Strong evidence' %}badge-critical{% elif forensics.sec_k.evidence_strength == 'Likely contributor' %}badge-high{% else %}badge-medium{% endif %}">
+      {{ forensics.sec_k.evidence_strength }}
+    </span>
+  </div>
+  <p style="font-size:0.95rem;color:var(--text-primary);line-height:1.5;margin-bottom:10px">
+    {{ forensics.sec_k.possible_cause }}
+  </p>
+  <div style="font-size:0.85rem;color:var(--text-muted);background:rgba(0,0,0,0.25);padding:10px 14px;border-radius:8px">
+    <strong>Detailed Attribution:</strong> {{ forensics.sec_k.explanation }}
+  </div>
+</div>
+
+<!-- Before / After Visual Comparison Bars -->
+<div class="card mb-24">
+  <div class="card-title mb-16">📊 Before vs After Quantitative Shifts</div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:20px">
+    
+    <!-- Metric 1: Execution Time -->
+    <div style="background:var(--bg-card2);padding:16px;border-radius:10px;border:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span class="text-xs text-dim fw-600">p95 Latency</span>
+        <span class="text-xs fw-700" style="color:{% if forensics.sec_b.pct_change > 50 %}var(--critical){% elif forensics.sec_b.pct_change > 20 %}var(--high){% else %}var(--ok){% endif %}">
+          {{ '+' if forensics.sec_b.pct_change > 0 else '' }}{{ forensics.sec_b.pct_change }}%
+        </span>
+      </div>
+      <div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:2px">
+          <span class="text-dim">Baseline:</span>
+          <span class="mono">{{ forensics.visuals.execution_time.before_ms }} ms</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);height:8px;border-radius:4px;overflow:hidden">
+          <div style="background:var(--ok);width:{{ forensics.visuals.execution_time.before_pct }}%;height:100%"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:2px">
+          <span class="text-dim">Current Run:</span>
+          <span class="mono fw-700" style="color:var(--critical)">{{ forensics.visuals.execution_time.after_ms }} ms</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);height:8px;border-radius:4px;overflow:hidden">
+          <div style="background:var(--critical);width:{{ forensics.visuals.execution_time.after_pct }}%;height:100%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metric 2: Plan Estimated Cost -->
+    <div style="background:var(--bg-card2);padding:16px;border-radius:10px;border:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span class="text-xs text-dim fw-600">Optimizer Plan Cost</span>
+        <span class="text-xs fw-700" style="color:var(--high)">Index → Full Scan</span>
+      </div>
+      <div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:2px">
+          <span class="text-dim">Baseline Cost:</span>
+          <span class="mono">{{ forensics.visuals.plan_cost.before_cost }}</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);height:8px;border-radius:4px;overflow:hidden">
+          <div style="background:var(--ok);width:{{ forensics.visuals.plan_cost.before_pct }}%;height:100%"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:2px">
+          <span class="text-dim">Current Plan Cost:</span>
+          <span class="mono fw-700" style="color:var(--high)">{{ forensics.visuals.plan_cost.after_cost }}</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);height:8px;border-radius:4px;overflow:hidden">
+          <div style="background:var(--high);width:{{ forensics.visuals.plan_cost.after_pct }}%;height:100%"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Metric 3: System Concurrency -->
+    <div style="background:var(--bg-card2);padding:16px;border-radius:10px;border:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+        <span class="text-xs text-dim fw-600">Workload / Concurrency</span>
+        <span class="text-xs fw-700" style="color:var(--accent)">+15% Load</span>
+      </div>
+      <div style="margin-bottom:6px">
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:2px">
+          <span class="text-dim">Baseline QPS:</span>
+          <span class="mono">{{ forensics.visuals.workload.before_concurrency }} ops</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);height:8px;border-radius:4px;overflow:hidden">
+          <div style="background:var(--accent2);width:{{ forensics.visuals.workload.before_pct }}%;height:100%"></div>
+        </div>
+      </div>
+      <div>
+        <div style="display:flex;justify-content:space-between;font-size:0.78rem;margin-bottom:2px">
+          <span class="text-dim">Current QPS:</span>
+          <span class="mono fw-700" style="color:var(--accent)">{{ forensics.visuals.workload.after_concurrency }} ops</span>
+        </div>
+        <div style="background:rgba(255,255,255,0.06);height:8px;border-radius:4px;overflow:hidden">
+          <div style="background:var(--accent);width:{{ forensics.visuals.workload.after_pct }}%;height:100%"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- 12-Section Forensic Grid Layout -->
+
+<!-- Sections A, B: Query & Performance -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(350px, 1fr));gap:20px;margin-bottom:20px">
+  
+  <!-- Section A: Query Information -->
+  <div class="card">
+    <div class="card-title mb-12">📌 Section A: Query Information</div>
+    <div class="table-wrap">
+      <table style="font-size:0.82rem">
+        <tbody>
+          <tr>
+            <td class="text-dim" style="width:40%">Query ID</td>
+            <td class="mono fw-700">{{ forensics.sec_a.query_id }}</td>
+          </tr>
+          <tr>
+            <td class="text-dim">Query Type</td>
+            <td><span class="badge badge-indigo">{{ forensics.sec_a.query_type }}</span></td>
+          </tr>
+          <tr>
+            <td class="text-dim">Double-Booking Risk</td>
+            <td>
+              {% if forensics.sec_a.is_double_booking %}
+              <span style="color:var(--critical);font-weight:700">HIGH (Atomic Slot Verification)</span>
+              {% else %}
+              <span class="text-dim">Low</span>
+              {% endif %}
+            </td>
+          </tr>
+          <tr>
+            <td class="text-dim">Criticality</td>
+            <td class="fw-600">{{ forensics.sec_a.business_criticality }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Section B: Performance Comparison -->
+  <div class="card">
+    <div class="card-title mb-12">⚡ Section B: Performance Comparison</div>
+    <div class="table-wrap">
+      <table style="font-size:0.82rem">
+        <tbody>
+          <tr>
+            <td class="text-dim" style="width:40%">Baseline p95</td>
+            <td class="mono">{{ forensics.sec_b.baseline_p95_ms }} ms</td>
+          </tr>
+          <tr>
+            <td class="text-dim">Current p95</td>
+            <td class="mono fw-700" style="color:var(--critical)">{{ forensics.sec_b.current_p95_ms }} ms</td>
+          </tr>
+          <tr>
+            <td class="text-dim">Delta & % Surge</td>
+            <td class="fw-700" style="color:var(--critical)">
+              +{{ forensics.sec_b.delta_ms }} ms (+{{ forensics.sec_b.pct_change }}%)
+            </td>
+          </tr>
+          <tr>
+            <td class="text-dim">p50 / p99 Range</td>
+            <td class="mono text-dim">{{ forensics.sec_b.p50_ms }} ms / {{ forensics.sec_b.p99_ms }} ms</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Sections C, D: Plan & Index Comparison -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(350px, 1fr));gap:20px;margin-bottom:20px">
+  
+  <!-- Section C: Plan Comparison -->
+  <div class="card">
+    <div class="card-title mb-12">🔍 Section C: Execution Plan Comparison</div>
+    <div style="margin-bottom:10px">
+      <span class="text-xs text-dim">Plan Shift Summary:</span>
+      <div class="text-sm fw-600" style="color:var(--high);margin-top:2px">{{ forensics.sec_c.plan_diff_summary }}</div>
+    </div>
+    <div class="grid-2" style="gap:10px">
+      <div>
+        <p class="text-xs text-dim mb-4">Baseline Plan:</p>
+        <div class="plan-block baseline" style="font-size:0.75rem;padding:8px">{{ forensics.sec_c.before_plan }}</div>
+      </div>
+      <div>
+        <p class="text-xs text-dim mb-4">Current Degraded Plan:</p>
+        <div class="plan-block {% if forensics.sec_c.has_full_scan %}run-scan{% endif %}" style="font-size:0.75rem;padding:8px">{{ forensics.sec_c.after_plan }}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section D: Index Context -->
+  <div class="card">
+    <div class="card-title mb-12">🗂️ Section D: Index Context</div>
+    <div class="table-wrap">
+      <table style="font-size:0.82rem">
+        <tbody>
+          <tr>
+            <td class="text-dim" style="width:40%">Baseline Indexes</td>
+            <td class="mono text-xs">
+              {% for idx in forensics.sec_d.before_indexes %}
+              <span class="badge badge-ok">{{ idx }}</span>
+              {% else %}
+              <span class="text-dim">None</span>
+              {% endfor %}
+            </td>
+          </tr>
+          <tr>
+            <td class="text-dim">Current Indexes</td>
+            <td class="mono text-xs">
+              {% for idx in forensics.sec_d.after_indexes %}
+              <span class="badge badge-low">{{ idx }}</span>
+              {% else %}
+              <span style="color:var(--critical);font-weight:600">None (Index Lost)</span>
+              {% endfor %}
+            </td>
+          </tr>
+          <tr>
+            <td class="text-dim">Index Modifications</td>
+            <td>
+              {% for chg in forensics.sec_d.index_changes %}
+              <span class="badge badge-warning" style="font-size:0.7rem">{{ chg.index_name }}: {{ chg.change_type }}</span>
+              {% endfor %}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Sections E, F, G, H: System Context -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(280px, 1fr));gap:20px;margin-bottom:20px">
+  
+  <!-- Section E: Statistics Context -->
+  <div class="card">
+    <div class="card-title mb-12">📈 Section E: Statistics Context</div>
+    <div class="text-sm mb-6">
+      <span class="text-dim">Table:</span> <span class="mono fw-600">{{ forensics.sec_e.table_name }}</span>
+    </div>
+    <div class="text-sm mb-6">
+      <span class="text-dim">Status:</span> 
+      <span class="badge {% if forensics.sec_e.stats_status == 'STALE' %}badge-warning{% else %}badge-ok{% endif %}">
+        {{ forensics.sec_e.stats_status }} ({{ forensics.sec_e.stats_age_days }} days old)
+      </span>
+    </div>
+    <div class="text-xs text-dim">
+      Cardinality Estimate: {{ forensics.sec_e.before_row_est }} → {{ forensics.sec_e.after_row_est }} rows
+    </div>
+  </div>
+
+  <!-- Section F: Workload Context -->
+  <div class="card">
+    <div class="card-title mb-12">👥 Section F: Workload Context</div>
+    <div class="text-sm mb-6">
+      <span class="text-dim">Workload:</span> 
+      <span class="mono fw-600">{{ forensics.sec_f.current_workload }}</span>
+    </div>
+    <div class="text-sm mb-6">
+      <span class="text-dim">Concurrency Shift:</span> 
+      <span class="mono">+{{ forensics.sec_f.workload_increase_pct }}% QPS</span>
+    </div>
+    <div class="text-xs text-dim">
+      Classification: <em>{{ forensics.sec_f.cause_category }}</em>
+    </div>
+  </div>
+
+  <!-- Section G: Schema Changes -->
+  <div class="card">
+    <div class="card-title mb-12">🧱 Section G: Schema DDL</div>
+    {% for sc in forensics.sec_g.schema_changes %}
+    <div style="font-size:0.8rem;margin-bottom:6px">
+      <span class="badge badge-warning" style="font-size:0.65rem">{{ sc.change_type }}</span>
+      <span class="mono">{{ sc.affected_table }}</span><br>
+      <span class="text-dim text-xs">{{ sc.change_description }}</span>
+    </div>
+    {% else %}
+    <span class="text-dim text-xs">No DDL changes detected.</span>
+    {% endfor %}
+  </div>
+
+  <!-- Section H: Release History -->
+  <div class="card">
+    <div class="card-title mb-12">🚀 Section H: Release Context</div>
+    <div class="text-sm mb-4">
+      <span class="text-dim">Version:</span> <span class="mono fw-700">{{ forensics.sec_h.release_version }}</span>
+    </div>
+    <div class="text-sm mb-4">
+      <span class="text-dim">Release ID:</span> <span class="mono">{{ forensics.sec_h.release_id }}</span>
+    </div>
+    <div class="text-xs text-dim">
+      Deployed: {{ forensics.sec_h.deployment_time[:16] }}
+    </div>
+  </div>
+
+</div>
+
+<!-- Section I: Change Timeline -->
+<div class="card mb-20">
+  <div class="card-title mb-12">⏱️ Section I: Change Timeline (Root Cause Progression)</div>
+  <div class="timeline-steps" style="padding-left:12px;border-left:2px solid var(--accent);display:flex;flex-direction:column;gap:8px">
+    {% for step in forensics.sec_i.timeline %}
+    <div style="font-size:0.85rem">
+      <span class="text-accent fw-700">{{ step.step }}:</span> 
+      <span style="color:var(--text-primary)">{{ step.event }}</span>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- Section J: Rule Evaluation Breakdown -->
+<div class="card mb-20">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div class="card-title">⚖️ Section J: Rule Evaluation Breakdown</div>
+    <span class="text-xs text-dim">Rule Config: <strong>{{ forensics.sec_j.config_version }}</strong> | Total Score: <strong style="color:var(--critical)">{{ forensics.sec_j.total_score }} pts</strong></span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Rule Name</th>
+          <th>Condition Evaluated</th>
+          <th>Description</th>
+          <th>Points Awarded</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in forensics.sec_j.triggered_rules %}
+        <tr>
+          <td class="mono fw-600 text-sm">{{ r.rule_name }}</td>
+          <td class="text-sm">{{ r.condition }}</td>
+          <td class="text-dim text-xs">{{ r.description }}</td>
+          <td><span class="badge badge-critical">+{{ r.points }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Sections K, L: Evidence & Recommended Remediation -->
+<div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(350px, 1fr));gap:20px;margin-bottom:24px">
+  
+  <!-- Section K: Evidence & Attribution -->
+  <div class="card">
+    <div class="card-title mb-12">📋 Section K: Evidence Synthesis</div>
+    <div class="mb-10">
+      <span class="text-xs text-dim">Evidence Strength:</span>
+      <span class="badge badge-critical" style="margin-left:6px">{{ forensics.sec_k.evidence_strength }}</span>
+    </div>
+    <div class="mb-10 text-xs">
+      <span class="text-dim">Confirming Signals:</span><br>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">
+        {% for sig in forensics.sec_k.confirming_dimensions %}
+        <span class="badge badge-indigo" style="font-size:0.7rem">✓ {{ sig | upper }}</span>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="text-xs text-muted" style="background:var(--bg-card2);padding:10px;border-radius:6px">
+      {{ forensics.sec_k.explanation }}
+    </div>
+  </div>
+
+  <!-- Section L: Recommended Remediation -->
+  <div class="card">
+    <div class="card-title mb-12">💡 Section L: Actionable Recommendations</div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      {% for rec in forensics.sec_l.recommendations %}
+      <div style="display:flex;gap:10px;font-size:0.85rem;background:var(--bg-card2);padding:8px 12px;border-radius:6px;border-left:3px solid var(--ok)">
+        <span>🔧</span>
+        <span class="text-primary">{{ rec }}</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+</div>
+
+<!-- Timing chart across releases -->
+<div class="card mb-24">
+  <div class="card-title mb-12">📈 Historical Latency Across Deployments (p50 / p95 / p99 ms)</div>
+  <div class="chart-container">
+    <canvas id="timingChart"></canvas>
+  </div>
+</div>
+
+<!-- Execution History Across Snapshots -->
+<div class="card mb-24">
+  <div class="card-title mb-12">Historical Snapshots Captured</div>
+  {% if executions %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Release</th>
+          <th>Type</th>
+          <th>p50 ms</th>
+          <th>p95 ms</th>
+          <th>p99 ms</th>
+          <th>Index?</th>
+          <th>Indexes</th>
+          <th>Full Scan?</th>
+          <th>Row Est.</th>
+          <th>Captured</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in executions %}
+        <tr>
+          <td><span class="mono">{{ e.release_tag }}</span></td>
+          <td>
+            <span class="badge {% if e.snapshot_type == 'BASELINE' %}badge-ok{% else %}badge-medium{% endif %}" style="font-size:0.65rem">
+              {{ e.snapshot_type }}
+            </span>
+          </td>
+          <td class="text-sm">{{ '%.2f' % e.exec_ms_p50 }}</td>
+          <td class="text-sm fw-700">{{ '%.2f' % e.exec_ms_p95 }}</td>
+          <td class="text-sm">{{ '%.2f' % e.exec_ms_p99 }}</td>
+          <td>
+            {% if e.uses_index %}
+            <span style="color:var(--ok)">✓</span>
+            {% else %}
+            <span style="color:var(--critical)">✗ SCAN</span>
+            {% endif %}
+          </td>
+          <td class="text-xs text-muted">
+            {% for idx in e.index_names_list %}
+            <span class="mono" style="font-size:0.7rem">{{ idx }}</span>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+            {% if not e.index_names_list %}<span class="text-dim">none</span>{% endif %}
+          </td>
+          <td>
+            {% if e.has_full_scan %}
+            <span style="color:var(--critical)">Yes ⚠️</span>
+            {% else %}
+            <span class="text-dim">No</span>
+            {% endif %}
+          </td>
+          <td class="text-dim text-xs">{{ e.row_est }}</td>
+          <td class="text-dim text-xs">{{ e.captured_at[:16] }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-dim text-sm">No execution records found for this query.</p>
+  {% endif %}
+</div>
+
+<!-- Regression Findings & Review Governance Workflow -->
+{% if regressions %}
+<div class="card">
+  <div class="card-title mb-12">🛡️ Regression Review & Governance Decision</div>
+  {% for r in regressions %}
+  <div style="border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:14px;background:var(--bg-card)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="badge badge-{{ r.severity | lower }}">{{ r.severity }}</span>
+        <span class="mono text-sm fw-600">Regression #{{ r.regression_id }}</span>
+      </div>
+      <div>
+        <span class="text-xs text-dim mr-6">Review Status:</span>
+        <span id="review-status-{{ r.regression_id }}" class="badge badge-{% if r.review_status == 'CONFIRMED' %}critical{% elif r.review_status == 'FALSE_POSITIVE' %}ok{% elif r.review_status == 'UNDER_REVIEW' %}medium{% elif r.review_status == 'RESOLVED' %}ok{% else %}low{% endif %}">
+          {{ r.review_status or 'NEW' }}
+        </span>
+      </div>
+    </div>
+
+    {% if r.reviewed_by %}
+    <div class="text-xs text-dim mb-12">
+      Last evaluated by <span class="mono fw-600">{{ r.reviewed_by }}</span> ({{ r.reviewer_role }}) on {{ r.reviewed_at[:19] }}
+    </div>
+    {% endif %}
+
+    <!-- Review Action Form -->
+    <form method="POST" action="{{ url_for('query_detail', query_id=query_id) }}" class="mb-12">
+      <input type="hidden" name="regression_id" value="{{ r.regression_id }}">
+      <div class="form-group mb-8">
+        <input type="text" name="note" class="form-input" placeholder="Add engineering review justification note..." style="font-size:0.85rem">
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="submit" name="action" value="ACKNOWLEDGE" class="btn btn-secondary btn-sm" id="btn-ack-{{ r.regression_id }}">
+          👁️ Acknowledge / Under Review
+        </button>
+        <button type="submit" name="action" value="CONFIRM" class="btn btn-danger btn-sm" id="btn-confirm-{{ r.regression_id }}">
+          ⚠️ Confirm Regression
+        </button>
+        <button type="submit" name="action" value="FALSE_POSITIVE" class="btn btn-secondary btn-sm" id="btn-fp-{{ r.regression_id }}">
+          🛡️ Mark False Positive
+        </button>
+        <button type="submit" name="action" value="RESOLVE" class="btn btn-primary btn-sm" id="btn-resolve-{{ r.regression_id }}">
+          ✅ Mark Resolved
+        </button>
+      </div>
+    </form>
+
+    <!-- Review History Timeline -->
+    {% set rev_history = reviews_by_regression.get(r.regression_id, []) %}
+    {% if rev_history %}
+    <div class="mt-12 pt-8" style="border-top:1px solid var(--border)">
+      <div class="text-xs text-dim fw-600 mb-6">Audit Trail ({{ rev_history | length }} decision records):</div>
+      <div class="table-wrap">
+        <table style="font-size:0.78rem">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Reviewer</th>
+              <th>Role</th>
+              <th>Action</th>
+              <th>Transition</th>
+              <th>Justification Note</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for rh in rev_history %}
+            <tr>
+              <td class="text-dim">{{ rh.reviewed_at[:16] }}</td>
+              <td class="mono fw-600">{{ rh.reviewer }}</td>
+              <td><span class="badge badge-low" style="font-size:0.6rem">{{ rh.role }}</span></td>
+              <td><span class="mono">{{ rh.action }}</span></td>
+              <td>
+                <span class="text-dim">{{ rh.previous_status }}</span> → 
+                <span class="fw-600">{{ rh.new_status }}</span>
+              </td>
+              <td class="text-muted">{{ rh.note or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<script src="{{ url_for('static', filename='charts.js') }}"></script>
+<script>
+  renderTimingChart(
+    'timingChart',
+    {{ chart_labels | safe }},
+    {{ chart_p50 | safe }},
+    {{ chart_p95 | safe }},
+    {{ chart_p99 | safe }}
+  );
+</script>
+{% endblock %}

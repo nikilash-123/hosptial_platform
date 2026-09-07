@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Login — Hospital Appointment Query Regression Detector">
+  <title>Login — Hospital QR Detector</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="login-page">
+  <div class="login-card animate-fade-up">
+
+    <div class="login-logo">
+      <div class="login-logo-icon">🏥</div>
+      <h2>Query Regression Detector</h2>
+      <p>Hospital Appointment Platform</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}" style="margin-bottom:14px">{{ msg }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <form method="POST" action="{{ url_for('login') }}">
+      <div class="form-group">
+        <label class="form-label" for="username">Username</label>
+        <input
+          id="username" name="username" type="text"
+          class="form-input" placeholder="e.g. dba_admin"
+          autocomplete="username" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="password">Password</label>
+        <input
+          id="password" name="password" type="password"
+          class="form-input" placeholder="••••••••"
+          autocomplete="current-password" required>
+      </div>
+      <button id="login-submit" type="submit" class="btn btn-primary" style="width:100%;justify-content:center;padding:11px">
+        Sign In →
+      </button>
+    </form>
+
+    <div class="credentials-hint">
+      <strong>Demo Credentials (RBAC Personas)</strong><br>
+      <code>admin_user</code> (or <code>dba_admin</code>) — Password: <code>admin@123</code> (Admin)<br>
+      <code>reviewer_user</code> (or <code>release_eng</code>) — Password: <code>admin@123</code> (Reviewer)
+    </div>
+
+  </div>
+</div>
+</body>
+</html>

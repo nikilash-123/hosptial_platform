@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Baselines{% endblock %}
+{% block page_title %}Baseline Snapshots{% endblock %}
+{% block breadcrumb %}Data · Baseline query execution snapshots{% endblock %}
+
+{% block content %}
+<div class="card mb-24" style="border-left:3px solid var(--accent)">
+  <div class="card-title">About Baselines</div>
+  <p class="text-sm text-muted">
+    A baseline captures the query execution plan, timing (p50/p95/p99), index usage, and table statistics
+    for every probe query at a specific release. It is the reference point all future runs are compared against.
+  </p>
+  {% if can('can_create_baseline') %}
+  <form method="POST" action="{{ url_for('generate_baseline_route') }}" class="d-flex items-center gap-12 mt-12" style="flex-wrap:wrap">
+    <div class="d-flex items-center gap-6">
+      <label class="text-xs text-dim">Release Tag:</label>
+      <input type="text" name="release_tag" value="v1.0.0" class="input-sm mono" style="width:110px;padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-input);color:var(--text)" required>
+    </div>
+    <div class="d-flex items-center gap-6">
+      <label class="text-xs text-dim">Source:</label>
+      <select name="source" class="input-sm" style="padding:4px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg-input);color:var(--text)">
+        <option value="dataset">Synthetic Dataset (Deterministic seed 42)</option>
+        <option value="live">Live Database (data/hospital.db)</option>
+      </select>
+    </div>
+    <button type="submit" class="btn btn-primary" style="padding:4px 14px;font-size:0.8rem">
+      ⚡ Generate & Activate Baseline
+    </button>
+  </form>
+  {% else %}
+  <p class="text-xs text-dim" style="margin-top:8px">
+    ⚠️ You need <strong>DBA Admin</strong> role to create or modify baselines.
+  </p>
+  {% endif %}
+</div>
+
+<!-- Active Multi-Dimensional Query Baselines -->
+{% if active_baselines %}
+<div class="card mb-24">
+  <div class="card-title d-flex justify-between items-center mb-12">
+    <span>🎯 Active Query Baseline Fingerprints ({{ active_baselines | length }})</span>
+    <span class="badge badge-ok" style="font-size:0.75rem">Active Tag: {{ (active_baselines.values() | list)[0].baseline_tag if active_baselines else 'N/A' }}</span>
+  </div>
+  <p class="text-xs text-muted mb-16">
+    Multi-dimensional baseline profiles capturing median (p50), percentiles, plan hashes, supported indexes, and normal workload envelopes.
+  </p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Query ID</th>
+          <th>Query Name</th>
+          <th>Type</th>
+          <th>Median (p50)</th>
+          <th>p95</th>
+          <th>p99</th>
+          <th>Plan Hash</th>
+          <th>Indexes</th>
+          <th>Rows Examined</th>
+          <th>Workload</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for qid, b in active_baselines.items() %}
+        <tr>
+          <td><span class="mono fw-700 text-sm" style="color:var(--accent)">{{ b.query_id }}</span></td>
+          <td class="text-xs">{{ b.query_name }}</td>
+          <td><span class="badge badge-secondary" style="font-size:0.65rem">{{ b.query_type }}</span></td>
+          <td class="mono text-sm fw-600">{{ '%.2f' % b.median_exec_ms }} ms</td>
+          <td class="mono text-sm">{{ '%.2f' % b.p95_exec_ms }} ms</td>
+          <td class="mono text-xs text-dim">{{ '%.2f' % b.p99_exec_ms }} ms</td>
+          <td><code class="text-xs" style="color:var(--accent2)">{{ b.plan_hash[:10] }}…</code></td>
+          <td class="text-xs">
+            {% if b.indexes %}
+              {% for idx in b.indexes %}
+                <span class="type-chip" style="font-size:0.65rem">{{ idx }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="text-dim">—</span>
+            {% endif %}
+          </td>
+          <td class="text-xs mono">{{ b.rows_examined }}</td>
+          <td><span class="badge badge-ok" style="font-size:0.65rem">{{ b.normal_workload_level }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+{% if baselines %}
+<div class="card">
+  <div class="card-title mb-12">Baseline Snapshot History ({{ baselines | length }})</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Release</th>
+          <th>Captured</th>
+          <th>Queries</th>
+          <th>Appointments</th>
+          <th>DB Size</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in baselines %}
+        <tr>
+          <td class="text-dim text-xs">#{{ s.snapshot_id }}</td>
+          <td><span class="mono">{{ s.release_tag }}</span></td>
+          <td class="text-sm text-muted">{{ s.captured_at[:19] }}</td>
+          <td>{{ s.query_count }}</td>
+          <td>{{ s.row_counts_parsed.get('appointments', '?') | string | replace(',','') }}</td>
+          <td class="text-dim text-xs">{{ '%.1f' % (s.db_size_bytes / 1048576) }} MB</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:48px">
+  <div style="font-size:3rem;margin-bottom:14px">📌</div>
+  <p class="text-muted">No baseline snapshots registered yet.</p>
+  <p class="text-xs text-dim" style="margin-top:8px">
+    Click <strong>Generate & Activate Baseline</strong> above or run <code>python src/detector.py baseline --release v1.0 --from-dataset</code>.
+  </p>
+</div>
+{% endif %}
+{% endblock %}
+

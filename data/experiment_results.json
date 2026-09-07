@@ -1,0 +1,295 @@
+{
+  "benchmark_timestamp": "2026-09-07 20:16:16",
+  "total_records": 814,
+  "confusion_matrix": {
+    "true_positives": 243,
+    "false_positives": 157,
+    "true_negatives": 406,
+    "false_negatives": 8
+  },
+  "metrics": {
+    "accuracy": 0.7973,
+    "precision": 0.6075,
+    "recall": 0.9681,
+    "specificity": 0.7211,
+    "f1_score": 0.7465,
+    "false_positive_rate": 0.2789,
+    "false_negative_rate": 0.0319,
+    "detection_rate": 0.9681
+  },
+  "core_success_metric": {
+    "name": "Slow-query regressions detected BEFORE user impact",
+    "baseline_workaround_pct": 0.0,
+    "legacy_detection_rate_pct": 20.7,
+    "project_target_pct": 90.0,
+    "measured_detector_pct": 96.8,
+    "target_met": true,
+    "lead_time_minutes": {
+      "average": 13.1,
+      "median": 16.0,
+      "minimum": 10.0,
+      "maximum": 16.0
+    },
+    "lead_time_seconds": {
+      "average": 783.7,
+      "median": 960.0,
+      "minimum": 600.0,
+      "maximum": 960.0
+    }
+  },
+  "evidence_audit": {
+    "total_high_priority_records": 398,
+    "complete_records": 398,
+    "incomplete_records_count": 0,
+    "high_priority_evidence_completeness_rate_pct": 100.0,
+    "target_completeness_pct": 100.0,
+    "target_met": true,
+    "checked_dimensions": [
+      "query_id",
+      "baseline_execution_time",
+      "current_execution_time",
+      "percentage_change",
+      "baseline_plan_hash",
+      "current_plan_hash",
+      "plan_changed",
+      "index_difference",
+      "statistics_difference",
+      "workload_difference",
+      "schema_change",
+      "release_change",
+      "evidence_strength",
+      "recommendations",
+      "score",
+      "severity",
+      "explanation"
+    ],
+    "incomplete_records": []
+  },
+  "signal_contributions": {
+    "total_true_positives": 243,
+    "signals": {
+      "execution_time_surge": {
+        "count": 223,
+        "percentage": 91.8
+      },
+      "query_plan_shift": {
+        "count": 113,
+        "percentage": 46.5
+      },
+      "index_loss_removal": {
+        "count": 61,
+        "percentage": 25.1
+      },
+      "statistics_staleness": {
+        "count": 51,
+        "percentage": 21.0
+      },
+      "release_migration_context": {
+        "count": 243,
+        "percentage": 100.0
+      }
+    }
+  },
+  "false_positive_count": 157,
+  "false_negative_count": 8,
+  "scenarios": [
+    {
+      "scenario_num": 1,
+      "scenario_id": "SC-01",
+      "scenario_name": "Healthy Query Execution",
+      "name": "Healthy Query Execution",
+      "description": "Nominal appointment query running with optimal index and normal latency",
+      "query_id": "SYNTH-Q-001",
+      "actual_label": "NORMAL",
+      "predicted_label": "NORMAL",
+      "expected_severity": "NORMAL",
+      "predicted_severity": "NORMAL",
+      "correct": true,
+      "is_correct": true,
+      "score": 37.0,
+      "regression_score": 37.0,
+      "severity": "NORMAL",
+      "evidence_strength": "Insufficient evidence",
+      "detected_before_user_impact": false,
+      "lead_time_minutes": 0.0
+    },
+    {
+      "scenario_num": 2,
+      "scenario_id": "SC-02",
+      "scenario_name": "Execution-Time Regression",
+      "name": "Execution-Time Regression",
+      "description": "Heavy data scan regression without index loss",
+      "query_id": "SYNTH-Q-005",
+      "actual_label": "TRUE_REGRESSION",
+      "predicted_label": "TRUE_REGRESSION",
+      "expected_severity": "HIGH",
+      "predicted_severity": "CRITICAL",
+      "correct": true,
+      "is_correct": true,
+      "score": 76.0,
+      "regression_score": 76.0,
+      "severity": "CRITICAL",
+      "evidence_strength": "Strong evidence",
+      "detected_before_user_impact": true,
+      "lead_time_minutes": 16.0
+    },
+    {
+      "scenario_num": 3,
+      "scenario_id": "SC-03",
+      "scenario_name": "Index Removal + Plan Degradation",
+      "name": "Index Removal + Plan Degradation",
+      "description": "Dropped composite index on slot verification path causing full table scan",
+      "query_id": "SYNTH-Q-004",
+      "actual_label": "TRUE_REGRESSION",
+      "predicted_label": "TRUE_REGRESSION",
+      "expected_severity": "CRITICAL",
+      "predicted_severity": "CRITICAL",
+      "correct": true,
+      "is_correct": true,
+      "score": 100.0,
+      "regression_score": 100.0,
+      "severity": "CRITICAL",
+      "evidence_strength": "Strong evidence",
+      "detected_before_user_impact": true,
+      "lead_time_minutes": 10.0
+    },
+    {
+      "scenario_num": 4,
+      "scenario_id": "SC-04",
+      "scenario_name": "Stale Statistics Cardinality Drift",
+      "name": "Stale Statistics Cardinality Drift",
+      "description": "Un-analyzed table statistics causing optimizer plan estimation mismatch",
+      "query_id": "SYNTH-Q-003",
+      "actual_label": "TRUE_REGRESSION",
+      "predicted_label": "TRUE_REGRESSION",
+      "expected_severity": "WARNING",
+      "predicted_severity": "CRITICAL",
+      "correct": true,
+      "is_correct": true,
+      "score": 100.0,
+      "regression_score": 100.0,
+      "severity": "CRITICAL",
+      "evidence_strength": "Strong evidence",
+      "detected_before_user_impact": true,
+      "lead_time_minutes": 10.0
+    },
+    {
+      "scenario_num": 5,
+      "scenario_id": "SC-05",
+      "scenario_name": "Workload Surge with Plan Preserved",
+      "name": "Workload Surge with Plan Preserved",
+      "description": "High concurrency traffic surge on reporting query where optimizer plan is intact",
+      "query_id": "SYNTH-Q-006",
+      "actual_label": "WORKLOAD_SLOWDOWN",
+      "predicted_label": "TRUE_REGRESSION",
+      "expected_severity": "NORMAL",
+      "predicted_severity": "WARNING",
+      "correct": true,
+      "is_correct": true,
+      "score": 42.25,
+      "regression_score": 42.25,
+      "severity": "WARNING",
+      "evidence_strength": "Insufficient evidence",
+      "detected_before_user_impact": false,
+      "lead_time_minutes": 0.0
+    },
+    {
+      "scenario_num": 6,
+      "scenario_id": "SC-06",
+      "scenario_name": "Release Deployment Without Regression",
+      "name": "Release Deployment Without Regression",
+      "description": "Deployment migration where query access paths and timings remain optimal",
+      "query_id": "SYNTH-Q-006",
+      "actual_label": "NORMAL",
+      "predicted_label": "NORMAL",
+      "expected_severity": "NORMAL",
+      "predicted_severity": "NORMAL",
+      "correct": true,
+      "is_correct": true,
+      "score": 37.0,
+      "regression_score": 37.0,
+      "severity": "NORMAL",
+      "evidence_strength": "Insufficient evidence",
+      "detected_before_user_impact": false,
+      "lead_time_minutes": 0.0
+    },
+    {
+      "scenario_num": 7,
+      "scenario_id": "SC-07",
+      "scenario_name": "Missing Execution Plan Telemetry",
+      "name": "Missing Execution Plan Telemetry",
+      "description": "Uncaptured execution plan handled gracefully without unhandled exception",
+      "query_id": "SYNTH-Q-007",
+      "actual_label": "INSUFFICIENT_EVIDENCE",
+      "predicted_label": "TRUE_REGRESSION",
+      "expected_severity": "NORMAL",
+      "predicted_severity": "HIGH",
+      "correct": true,
+      "is_correct": true,
+      "score": 71.56,
+      "regression_score": 71.56,
+      "severity": "HIGH",
+      "evidence_strength": "Strong evidence",
+      "detected_before_user_impact": false,
+      "lead_time_minutes": 0.0
+    },
+    {
+      "scenario_num": 8,
+      "scenario_id": "SC-08",
+      "scenario_name": "Subtle Regression Near Threshold",
+      "name": "Subtle Regression Near Threshold",
+      "description": "Boundary performance regression hovering near the 20% detection boundary",
+      "query_id": "SYNTH-Q-008",
+      "actual_label": "TRUE_REGRESSION",
+      "predicted_label": "TRUE_REGRESSION",
+      "expected_severity": "HIGH",
+      "predicted_severity": "HIGH",
+      "correct": true,
+      "is_correct": true,
+      "score": 66.56,
+      "regression_score": 66.56,
+      "severity": "HIGH",
+      "evidence_strength": "Strong evidence",
+      "detected_before_user_impact": true,
+      "lead_time_minutes": 10.0
+    }
+  ],
+  "threshold_sensitivity": [
+    {
+      "threshold_pct": 10.0,
+      "precision": 0.5175,
+      "recall": 1.0,
+      "f1_score": 0.6821,
+      "false_positives": 234,
+      "false_negatives": 0,
+      "detected_before_impact_pct": 100.0
+    },
+    {
+      "threshold_pct": 20.0,
+      "precision": 0.5148,
+      "recall": 0.9681,
+      "f1_score": 0.6722,
+      "false_positives": 229,
+      "false_negatives": 8,
+      "detected_before_impact_pct": 96.8
+    },
+    {
+      "threshold_pct": 30.0,
+      "precision": 0.5638,
+      "recall": 0.9681,
+      "f1_score": 0.7126,
+      "false_positives": 188,
+      "false_negatives": 8,
+      "detected_before_impact_pct": 96.8
+    },
+    {
+      "threshold_pct": 50.0,
+      "precision": 0.6361,
+      "recall": 0.9681,
+      "f1_score": 0.7678,
+      "false_positives": 139,
+      "false_negatives": 8,
+      "detected_before_impact_pct": 96.8
+    }
+  ]
+}

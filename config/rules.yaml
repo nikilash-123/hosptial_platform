@@ -1,0 +1,240 @@
+# Configurable Detection Rules
+# Hospital Appointment Platform — Query Regression Detector
+# All thresholds, weights, and evidence requirements are externally configurable.
+# No hard-coded detection or priority decisions in Python code.
+
+# ── Configuration Version ─────────────────────────────────────────────────────
+rule_config_version: "v1.0"
+
+# ── Timing & Performance Thresholds ───────────────────────────────────────────
+thresholds:
+  # Minimum % increase in p95 execution time to flag ANY regression
+  time_regression_pct: 20.0
+  execution_time_regression_percent: 20.0
+  warning_percentage_increase: 20.0
+
+  # % increase → HIGH severity label
+  time_high_pct: 50.0
+
+  # % increase → CRITICAL severity label
+  time_critical_pct: 100.0
+  critical_regression_percent: 100.0
+
+  # % increase → MEDIUM severity label
+  time_medium_pct: 20.0
+
+  # Absolute p95 ms warning threshold
+  absolute_high_ms: 500.0
+  execution_time_warning_ms: 500.0
+
+  # Absolute p95 ms that is always CRITICAL regardless of % change
+  absolute_critical_ms: 2000.0
+  execution_time_critical_ms: 2000.0
+
+  # Minimum absolute p95 ms before % thresholds apply (ignore sub-ms noise)
+  minimum_meaningful_ms: 1.0
+
+  # Query plan cost increase threshold (%)
+  plan_cost_increase_percent: 30.0
+
+  # Estimated rows / cardinality drift threshold (%)
+  estimated_rows_increase_threshold: 50.0
+
+  # Index scan degradation threshold (%)
+  index_scan_degradation_threshold: 20.0
+
+  # Statistics staleness threshold (days)
+  stale_statistics_days: 7
+
+  # Workload increase & spike thresholds (%)
+  workload_increase_percent: 30.0
+  workload_spike_threshold: 50.0
+
+# ── Query Plan Rules ──────────────────────────────────────────────────────────
+plan_rules:
+  # Flag when a SEARCH/INDEX access changed to a SCAN (full table)
+  flag_scan_regression: true
+
+  # Flag when query was using at least one index and now uses none
+  flag_index_loss: true
+
+  # Flag when any new SCAN node appears that was not in baseline
+  flag_new_full_scan: true
+
+  # Require plan text to differ for plan_changed to be true
+  strict_plan_diff: true
+
+  # Plan cost drift threshold (%)
+  plan_cost_increase_percent: 30.0
+
+  # Full table scan penalty
+  full_table_scan_penalty: 25.0
+
+# ── Statistics Rules ──────────────────────────────────────────────────────────
+stats_rules:
+  # Flag when planner row estimate has drifted by more than this %
+  flag_row_estimate_drift_pct: 50.0
+
+  # Flag when total table rows have grown by more than this %
+  flag_table_growth_pct: 200.0
+
+  # Maximum age (in days) before table/index statistics are flagged as stale
+  stats_staleness_days_threshold: 30
+  stale_statistics_days: 7
+
+  # Weight given to statistics degradation
+  statistics_degradation_weight: 10.0
+
+# ── Workload Rules ────────────────────────────────────────────────────────────
+workload_rules:
+  # Flag when current workload exceeds baseline normal operational envelope
+  flag_workload_surge: true
+
+  # Highest workload rating permitted before concurrency alarms trigger
+  max_allowed_workload_level: "HIGH"
+
+  # Maximum execution time variance allowed solely due to concurrency fluctuations
+  workload_variance_pct: 40.0
+  workload_increase_percent: 30.0
+  workload_spike_threshold: 50.0
+  workload_evidence_weight: 10.0
+
+# ── Index Rules ───────────────────────────────────────────────────────────────
+index_rules:
+  # Flag when an index definition, column order, or collation has been altered
+  flag_index_modification: true
+
+  # Flag when an expected baseline index is completely missing or dropped
+  flag_index_loss: true
+
+  # Weights for index events
+  index_removal_weight: 20.0
+  index_modification_weight: 15.0
+  missing_index_weight: 20.0
+
+# ── Change Correlation Settings ───────────────────────────────────────────────
+change_correlation:
+  correlation_time_window_hours: 48
+  release_correlation_window_hours: 48
+  schema_correlation_window_hours: 48
+  stats_correlation_window_hours: 48
+  index_correlation_window_hours: 48
+
+# ── Severity Matrix ───────────────────────────────────────────────────────────
+# Evaluated in order; first matching condition wins.
+# Flags: time_flag, plan_flag, index_loss
+severity_matrix:
+  - condition: {time_flag: true,  plan_flag: true,  index_loss: true}
+    severity: CRITICAL
+  - condition: {time_flag: true,  plan_flag: true,  index_loss: false}
+    severity: HIGH
+  - condition: {time_flag: true,  plan_flag: false, index_loss: true}
+    severity: HIGH
+  - condition: {time_flag: false, plan_flag: true,  index_loss: true}
+    severity: HIGH
+  - condition: {time_flag: true,  plan_flag: false, index_loss: false}
+    severity: MEDIUM
+  - condition: {time_flag: false, plan_flag: true,  index_loss: false}
+    severity: MEDIUM
+  - condition: {time_flag: false, plan_flag: false, index_loss: true}
+    severity: MEDIUM
+  - condition: {time_flag: false, plan_flag: false, index_loss: false}
+    severity: OK
+
+# ── Regression Scoring Weights ────────────────────────────────────────────────
+scoring_weights:
+  performance_weight: 35.0
+  execution_time: 30.0
+  plan_weight: 25.0
+  plan_change: 25.0
+  full_table_scan: 25.0
+  full_table_scan_penalty: 25.0
+  index_weight: 20.0
+  index_removed: 20.0
+  index_modified: 15.0
+  missing_index: 20.0
+  statistics_weight: 10.0
+  stale_statistics: 10.0
+  change_context_weight: 10.0
+  workload_surge: 10.0
+  recent_release: 10.0
+  schema_changed: 15.0
+  double_booking_multiplier: 1.25
+
+# ── Priority Score Thresholds ─────────────────────────────────────────────────
+score_thresholds:
+  critical_regression_score: 75.0
+  regression_score: 50.0
+  warning_score: 25.0
+
+priority_thresholds:
+  warning_min_score: 25.0
+  high_min_score: 50.0
+  critical_min_score: 75.0
+
+# ── Evidence Requirements ─────────────────────────────────────────────────────
+evidence_requirements:
+  # Minimum number of confirming evidence dimensions required for HIGH priority
+  min_evidence_for_high: 2
+
+  # Minimum number of confirming evidence dimensions required for CRITICAL priority
+  min_evidence_for_critical: 3
+
+  # Action when score is high but evidence is below minimum requirement:
+  # Options: "MANUAL_REVIEW_REQUIRED" or "INSUFFICIENT_EVIDENCE"
+  insufficient_evidence_action: "MANUAL_REVIEW_REQUIRED"
+
+  # Whether execution plan verification is strictly required for high/critical
+  require_plan_for_high: true
+  require_plan_for_critical: true
+
+# ── Change Context Analysis Settings ──────────────────────────────────────────
+change_context:
+  correlation_time_window_hours: 48
+  workload_increase_threshold_pct: 30.0
+  stale_statistics_threshold_days: 7
+  confidence_weights:
+    schema_weight: 0.25
+    index_weight: 0.35
+    stats_weight: 0.20
+    workload_weight: 0.20
+
+# ── False-Positive Grace Settings ─────────────────────────────────────────────
+false_positive_grace:
+  # Require at least this many timing runs for a stable p95 measurement
+  min_runs_for_stable: 5
+
+  # If delta_pct < noise_band_pct AND no plan/index change → suppress as OK
+  noise_band_pct: 10.0
+
+# ── Experiment / Evaluation Settings ─────────────────────────────────────────
+evaluation:
+  # Ground-truth labels for the built-in experiment scenarios
+  scenarios:
+    drop_index:
+      expected_severity: CRITICAL
+      expected_query_ids: [QRY-001, QRY-004]
+    data_growth:
+      expected_severity: HIGH
+      expected_query_ids: [QRY-003, QRY-004]
+    stats_stale:
+      expected_severity: MEDIUM
+      expected_query_ids: [QRY-001, QRY-003]
+    noise_only:
+      expected_severity: OK
+      expected_query_ids: []
+
+# ── Role Capabilities ─────────────────────────────────────────────────────────
+roles:
+  dba_admin:
+    can_edit_rules: true
+    can_mark_false_positive: true
+    can_create_baseline: true
+    can_delete_snapshots: true
+    can_view_all: true
+  release_engineer:
+    can_edit_rules: false
+    can_mark_false_positive: false
+    can_create_baseline: false
+    can_delete_snapshots: false
+    can_view_all: true

@@ -1,0 +1,99 @@
+# Probe Query Registry
+# Hospital Appointment Platform — Query Regression Detector
+# All queries use synthetic data only (see config/privacy_assumptions.md)
+
+queries:
+  - id: QRY-001
+    label: "Doctor schedule lookup (double-booking check)"
+    priority: CRITICAL
+    description: "Core query used to check a doctor's schedule before booking. Must be fast to prevent double-booking race conditions."
+    params:
+      doctor_id: "SYNTH-D-001"
+      appt_date: "2025-06-15"
+    sql: |
+      SELECT appt_id, appt_time, duration_mins, status
+      FROM appointments
+      WHERE doctor_id = 'SYNTH-D-001'
+        AND appt_date = '2025-06-15'
+        AND status = 'SCHEDULED'
+      ORDER BY appt_time;
+
+  - id: QRY-002
+    label: "Patient upcoming appointments"
+    priority: HIGH
+    description: "Retrieves all upcoming appointments for a patient, joined with doctor specialty."
+    params:
+      patient_id: "SYNTH-P-000001"
+    sql: |
+      SELECT a.appt_id, a.appt_date, a.appt_time, a.duration_mins, d.specialty
+      FROM appointments a
+      JOIN doctors d ON a.doctor_id = d.doctor_id
+      WHERE a.patient_id = 'SYNTH-P-000001'
+        AND a.status = 'SCHEDULED'
+        AND a.appt_date >= date('now')
+      ORDER BY a.appt_date, a.appt_time;
+
+  - id: QRY-003
+    label: "Department availability window"
+    priority: HIGH
+    description: "Counts scheduled appointments per day for a department. Used by schedulers to find available slots."
+    params:
+      dept_id: "SYNTH-DEPT-01"
+      start_date: "2025-06-01"
+      end_date: "2025-06-30"
+    sql: |
+      SELECT appt_date, COUNT(*) as slot_count
+      FROM appointments
+      WHERE dept_id = 'SYNTH-DEPT-01'
+        AND appt_date BETWEEN '2025-06-01' AND '2025-06-30'
+        AND status = 'SCHEDULED'
+      GROUP BY appt_date
+      ORDER BY appt_date;
+
+  - id: QRY-004
+    label: "Concurrent booking conflict scan (anti double-book)"
+    priority: CRITICAL
+    description: "Scans for overlapping appointments for the same doctor on the same day. The primary safeguard against double-booking."
+    params: {}
+    sql: |
+      SELECT a1.appt_id, a1.doctor_id, a1.appt_date, a1.appt_time,
+             a2.appt_id as conflict_id, a2.appt_time as conflict_time
+      FROM appointments a1
+      JOIN appointments a2
+        ON a1.doctor_id = a2.doctor_id
+       AND a1.appt_date = a2.appt_date
+       AND a1.appt_id < a2.appt_id
+       AND a1.status = 'SCHEDULED'
+       AND a2.status = 'SCHEDULED'
+       AND (
+             CAST(substr(a1.appt_time,1,2) AS INTEGER)*60 + CAST(substr(a1.appt_time,4,2) AS INTEGER) +
+             a1.duration_mins
+           ) > (
+             CAST(substr(a2.appt_time,1,2) AS INTEGER)*60 + CAST(substr(a2.appt_time,4,2) AS INTEGER)
+           )
+      LIMIT 100;
+
+  - id: QRY-005
+    label: "Audit log recent schema changes"
+    priority: MEDIUM
+    description: "Retrieves recent audit log entries. Used during post-release verification."
+    params: {}
+    sql: |
+      SELECT log_id, event_type, description, release_tag, applied_at
+      FROM audit_log
+      ORDER BY applied_at DESC
+      LIMIT 50;
+
+  - id: QRY-006
+    label: "Active doctors in department"
+    priority: MEDIUM
+    description: "Lists active doctors in a department. Used to populate booking dropdowns."
+    params:
+      dept_id: "SYNTH-DEPT-01"
+    sql: |
+      SELECT d.doctor_id, d.specialty, dep.dept_name
+      FROM doctors d
+      JOIN departments dep ON d.dept_id = dep.dept_id
+      WHERE d.dept_id = 'SYNTH-DEPT-01'
+        AND d.is_active = 1
+      ORDER BY d.specialty;

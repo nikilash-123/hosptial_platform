@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Release Runs{% endblock %}
+{% block page_title %}Release Run Snapshots{% endblock %}
+{% block breadcrumb %}Data · Post-change query execution runs{% endblock %}
+
+{% block content %}
+<div class="card mb-24" style="border-left:3px solid var(--accent2)">
+  <div class="card-title">About Release Runs</div>
+  <p class="text-sm text-muted">
+    A release run re-executes all probe queries after a schema change, index change, or data growth event.
+    It is compared against the baseline to detect regressions.
+  </p>
+  <p class="text-xs text-dim" style="margin-top:8px">
+    To capture a run: <code>python src/detector.py run --release v1.1</code> then
+    <code>python src/detector.py analyse --baseline v1.0 --run v1.1</code>
+  </p>
+</div>
+
+{% if runs %}
+<div class="card">
+  <div class="card-title mb-12">Captured Runs ({{ runs | length }})</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Release</th>
+          <th>Captured</th>
+          <th>Queries</th>
+          <th>Appointments</th>
+          <th>DB Size</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in runs %}
+        <tr>
+          <td class="text-dim text-xs">#{{ s.snapshot_id }}</td>
+          <td><span class="mono">{{ s.release_tag }}</span></td>
+          <td class="text-sm text-muted">{{ s.captured_at[:19] }}</td>
+          <td>{{ s.query_count }}</td>
+          <td>{{ s.row_counts_parsed.get('appointments', '?') | string }}</td>
+          <td class="text-dim text-xs">{{ '%.1f' % (s.db_size_bytes / 1048576) }} MB</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:48px">
+  <div style="font-size:3rem;margin-bottom:14px">🚀</div>
+  <p class="text-muted">No release runs captured yet.</p>
+  <p class="text-xs text-dim" style="margin-top:8px">
+    Apply a change then run: <code>python src/detector.py run --release v1.1</code>
+  </p>
+</div>
+{% endif %}
+{% endblock %}

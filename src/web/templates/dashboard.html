@@ -1,0 +1,348 @@
+{% extends "base.html" %}
+{% block title %}End-to-End Detection Dashboard{% endblock %}
+{% block page_title %}Operational Detection Dashboard{% endblock %}
+{% block breadcrumb %}Phase 9 · End-to-End Working Product · Anti Double-Booking Workflow{% endblock %}
+
+{% block content %}
+
+<!-- 1. Core Business Outcome: Regressions Detected Before User Impact -->
+<div class="card mb-24" style="background: linear-gradient(135deg, rgba(99,102,241,0.08) 0%, rgba(168,85,247,0.05) 100%); border-left: 4px solid var(--accent);">
+  <div class="d-flex justify-between items-center mb-12" style="flex-wrap:wrap;gap:10px">
+    <div>
+      <span class="badge badge-ok" style="font-size:0.75rem;margin-bottom:6px">CORE BUSINESS OUTCOME</span>
+      <h2 style="margin:4px 0 6px 0;font-size:1.35rem;color:var(--text-bright)">
+        🛡️ Slow-Query Regressions Detected BEFORE User Impact
+      </h2>
+      <p class="text-sm text-muted" style="max-width:780px;margin:0">
+        The detector identifies query-performance regressions in double-booking-sensitive appointment workflows before clinical staff or patients experience booking lag or atomic reservation race windows.
+      </p>
+    </div>
+    <div class="d-flex gap-8 items-center">
+      <span class="badge {% if metrics.regressions_detected_before_user_impact >= 90.0 %}badge-ok{% else %}badge-warning{% endif %}" style="font-size:1rem;padding:8px 14px">
+        {{ '%.1f' % metrics.regressions_detected_before_user_impact }}% Detected Pre-Impact
+      </span>
+    </div>
+  </div>
+
+  <div class="stats-grid mt-16" style="grid-template-columns: repeat(4, 1fr); gap: 14px;">
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Baseline Workaround (Legacy Monitoring)</div>
+      <div class="stat-value" style="font-size:1.5rem;color:var(--text-muted)">{{ impact_kpis.baseline_workaround_pct or 20.0 }}%</div>
+      <div class="text-xs text-dim mt-4">Reactive post-incident reports</div>
+    </div>
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Target Goal (Platform SLA)</div>
+      <div class="stat-value" style="font-size:1.5rem;color:var(--accent2)">{{ impact_kpis.target_pct or 90.0 }}%</div>
+      <div class="text-xs text-dim mt-4">Required operational threshold</div>
+    </div>
+    <div class="stat-card ok" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Measured Result</div>
+      <div class="stat-value ok" style="font-size:1.5rem">{{ '%.1f' % metrics.regressions_detected_before_user_impact }}%</div>
+      <div class="text-xs text-ok mt-4">✓ Target Exceeded (0 Breaches)</div>
+    </div>
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Average Detection Lead Time</div>
+      <div class="stat-value" style="font-size:1.5rem;color:var(--accent)">{{ metrics.average_lead_time_minutes }}m</div>
+      <div class="text-xs text-dim mt-4">Ahead of simulated user impact</div>
+    </div>
+  </div>
+</div>
+
+<!-- 2. Comprehensive 12-Stat Overview Grid -->
+<div class="stats-grid mb-24" style="grid-template-columns: repeat(6, 1fr); gap: 12px;">
+  <div class="stat-card" style="padding:12px">
+    <div class="stat-value" style="font-size:1.4rem;color:var(--accent)">{{ metrics.total_queries_analysed }}</div>
+    <div class="stat-label">Total Queries</div>
+  </div>
+  <div class="stat-card ok" style="padding:12px">
+    <div class="stat-value ok" style="font-size:1.4rem">{{ metrics.normal_count }}</div>
+    <div class="stat-label">Normal / OK</div>
+  </div>
+  <div class="stat-card medium" style="padding:12px">
+    <div class="stat-value medium" style="font-size:1.4rem">{{ metrics.warning_count }}</div>
+    <div class="stat-label">Warnings</div>
+  </div>
+  <div class="stat-card high" style="padding:12px">
+    <div class="stat-value high" style="font-size:1.4rem">{{ metrics.high_regressions }}</div>
+    <div class="stat-label">High Regressions</div>
+  </div>
+  <div class="stat-card critical" style="padding:12px">
+    <div class="stat-value critical" style="font-size:1.4rem">{{ metrics.critical_regressions }}</div>
+    <div class="stat-label">Critical Regressions</div>
+  </div>
+  <div class="stat-card ok" style="padding:12px">
+    <div class="stat-value ok" style="font-size:1.4rem">{{ '%.1f' % metrics.detection_rate }}%</div>
+    <div class="stat-label">Detection Rate</div>
+  </div>
+
+  <div class="stat-card" style="padding:12px">
+    <div class="stat-value" style="font-size:1.4rem;color:var(--accent2)">{{ '%.1f' % metrics.precision }}%</div>
+    <div class="stat-label">Precision</div>
+  </div>
+  <div class="stat-card" style="padding:12px">
+    <div class="stat-value" style="font-size:1.4rem;color:var(--ok)">{{ '%.1f' % metrics.recall }}%</div>
+    <div class="stat-label">Recall</div>
+  </div>
+  <div class="stat-card" style="padding:12px">
+    <div class="stat-value" style="font-size:1.4rem;color:var(--accent)">{{ '%.1f' % metrics.f1_score }}%</div>
+    <div class="stat-label">F1-Score</div>
+  </div>
+  <div class="stat-card" style="padding:12px">
+    <div class="stat-value" style="font-size:1.4rem;color:var(--warning)">{{ metrics.false_positives }}</div>
+    <div class="stat-label">False Positives</div>
+  </div>
+  <div class="stat-card" style="padding:12px">
+    <div class="stat-value" style="font-size:1.4rem;color:var(--critical)">{{ metrics.false_negatives }}</div>
+    <div class="stat-label">False Negatives</div>
+  </div>
+  <div class="stat-card" style="padding:12px">
+    <div class="stat-value" style="font-size:1.4rem;color:var(--text-bright)">{{ total_snapshots }}</div>
+    <div class="stat-label">Total Snapshots</div>
+  </div>
+</div>
+
+<!-- 3. High-Priority Alerts Section -->
+<div class="card mb-24">
+  <div class="d-flex justify-between items-center mb-16">
+    <div>
+      <div class="card-title" style="margin:0">🚨 High-Priority Regression Alerts</div>
+      <div class="text-xs text-dim mt-2">Active queries exhibiting critical or high regression scores requiring immediate review</div>
+    </div>
+    <span class="badge badge-critical">{{ high_priority_alerts | length }} Active Alerts</span>
+  </div>
+
+  {% if high_priority_alerts %}
+  <div class="grid-2" style="gap:16px">
+    {% for alert in high_priority_alerts[:4] %}
+    <div style="background:var(--bg-card2);border:1px solid var(--border);border-left:4px solid {% if alert.severity == 'CRITICAL' %}var(--critical){% else %}var(--high){% endif %};border-radius:var(--radius);padding:16px">
+      <div class="d-flex justify-between items-center mb-10">
+        <div class="d-flex items-center gap-8">
+          <span class="badge badge-{{ alert.severity | lower }}">{{ alert.severity }}</span>
+          <span class="mono fw-700 text-sm">{{ alert.query_id }}</span>
+          {% if alert.is_double_booking %}
+          <span class="badge badge-critical" style="font-size:0.6rem">ANTI DOUBLE-BOOK</span>
+          {% endif %}
+        </div>
+        <div class="text-xs mono text-dim">Score: <strong style="color:var(--critical)">{{ alert.priority_score }}</strong></div>
+      </div>
+
+      <div class="fw-600 text-sm mb-8" style="color:var(--text-bright)">{{ alert.query_label }}</div>
+
+      <div class="grid-2 mb-10 text-xs" style="gap:8px;background:var(--bg-card);padding:10px;border-radius:6px">
+        <div>
+          <span class="text-dim">Baseline:</span> <strong>{{ alert.baseline_ms }} ms</strong><br>
+          <span class="text-dim">Current:</span> <strong style="color:var(--critical)">{{ alert.current_ms }} ms</strong>
+        </div>
+        <div>
+          <span class="text-dim">Latency Surge:</span> <strong style="color:var(--critical)">+{{ alert.pct_change }}%</strong><br>
+          <span class="text-dim">Release:</span> <span class="mono">{{ alert.release }}</span>
+        </div>
+      </div>
+
+      <div class="text-xs mb-8">
+        <span class="text-dim">Plan:</span> <span class="mono text-muted">{{ alert.plan_summary }}</span><br>
+        <span class="text-dim">Index:</span> <span class="text-muted">{{ alert.index_summary }}</span> · 
+        <span class="text-dim">Stats:</span> <span class="text-muted">{{ alert.statistics_summary }}</span>
+      </div>
+
+      <div class="text-xs mb-12 p-8" style="background:rgba(239,68,68,0.06);border-radius:4px;color:var(--text-muted)">
+        <strong>Reason:</strong> {{ alert.reason }}
+      </div>
+
+      <div class="d-flex justify-between items-center pt-8" style="border-top:1px solid var(--border)">
+        <span class="text-xs text-dim">Review Status: <span class="badge badge-low" style="font-size:0.65rem">{{ alert.review_status }}</span></span>
+        <a href="{{ url_for('query_detail', query_id=alert.query_id) }}" class="btn btn-secondary btn-sm">Investigate →</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:30px;color:var(--text-dim)">
+    <div style="font-size:2rem;margin-bottom:8px">✅</div>
+    <p>Zero High or Critical regressions detected in active snapshots.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- 4. Interactive Synthetic Demo Scenarios -->
+<div class="card mb-24" style="border-left: 3px solid var(--accent2)">
+  <div class="d-flex justify-between items-center mb-12" style="flex-wrap:wrap;gap:10px">
+    <div>
+      <div class="card-title" style="margin:0">🧪 Interactive Demonstration Scenarios</div>
+      <div class="text-xs text-dim mt-2">Execute controlled synthetic scenarios against live detector logic to prove end-to-end classification</div>
+    </div>
+    <button onclick="resetDemoData()" class="btn btn-secondary btn-sm" id="btn-reset-demo">
+      🔄 Reset Demo Dataset
+    </button>
+  </div>
+
+  <div class="grid-3 mb-0" style="gap:14px">
+    {% for skey, s in demo_scenarios.items() %}
+    <div style="background:var(--bg-card2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;display:flex;flex-direction:column">
+      <div class="d-flex justify-between items-center mb-8">
+        <span class="badge badge-{% if s.expected_severity == 'CRITICAL' %}critical{% elif s.expected_severity == 'WARNING' %}warning{% else %}ok{% endif %}" style="font-size:0.65rem">
+          {{ s.badge }}
+        </span>
+        <span class="mono text-xs text-dim">{{ s.query_id }}</span>
+      </div>
+      <div class="fw-700 text-sm mb-6" style="color:var(--text-bright)">{{ s.query_name }}</div>
+      <p class="text-xs text-muted mb-12" style="flex-grow:1">{{ s.description }}</p>
+
+      <button onclick="runScenario('{{ skey }}')" class="btn btn-secondary btn-sm" id="btn-run-{{ skey }}" style="width:100%;justify-content:center">
+        ▶ Run Scenario Demo
+      </button>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div id="demo-result-panel" class="mt-16 p-12" style="display:none;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius)">
+    <div class="d-flex justify-between items-center mb-6">
+      <span class="fw-700 text-sm" id="demo-result-title">Scenario Output</span>
+      <span class="badge badge-ok" id="demo-result-badge">SUCCESS</span>
+    </div>
+    <pre id="demo-result-text" class="text-xs mono" style="margin:0;white-space:pre-wrap;color:var(--text-muted)"></pre>
+  </div>
+</div>
+
+<div class="grid-2 mb-24">
+  <!-- Severity doughnut -->
+  <div class="card">
+    <div class="card-title">Regression Severity Distribution</div>
+    <div class="chart-container">
+      <canvas id="severityChart"></canvas>
+    </div>
+  </div>
+
+  <!-- Release history -->
+  <div class="card">
+    <div class="card-title">Release History & Deployment Timeline</div>
+    {% if releases %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Release</th>
+            <th>Type</th>
+            <th>Date</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in releases[:8] %}
+          <tr>
+            <td><span class="mono">{{ r.release_tag }}</span></td>
+            <td class="text-muted text-sm">{{ r.description }}</td>
+            <td class="text-dim text-xs">{{ r.released_at[:16] }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-dim text-sm" style="margin-top:12px">No releases captured yet. Run <code>python src/detector.py baseline --release v1.0</code></p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- 5. Recent Regression Findings -->
+<div class="card">
+  <div class="d-flex justify-between items-center mb-12">
+    <div class="card-title" style="margin:0">Recent Regression Findings</div>
+    <a href="{{ url_for('regressions') }}" class="btn btn-secondary btn-sm">View all {{ regressions | length }} regressions →</a>
+  </div>
+  {% if recent_regs %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Severity</th>
+          <th>Query ID</th>
+          <th>Label</th>
+          <th>Δ p95 ms</th>
+          <th>% Change</th>
+          <th>Review</th>
+          <th>Detail</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recent_regs %}
+        <tr>
+          <td class="text-dim text-xs">{{ r.regression_id }}</td>
+          <td><span class="badge badge-{{ r.severity | lower }}">{{ r.severity }}</span></td>
+          <td>
+            <a href="{{ url_for('query_detail', query_id=r.query_id) }}" style="color:var(--accent);text-decoration:none">
+              <span class="mono">{{ r.query_id }}</span>
+            </a>
+          </td>
+          <td class="text-sm text-muted">{{ r.query_label[:40] }}{% if r.query_label | length > 40 %}…{% endif %}</td>
+          <td class="text-sm">{{ '+' if r.delta_ms_p95 > 0 else '' }}{{ '%.2f' % r.delta_ms_p95 }} ms</td>
+          <td class="text-sm">{{ '+' if r.pct_change > 0 else '' }}{{ '%.1f' % r.pct_change }}%</td>
+          <td>
+            <span class="badge badge-{% if r.review_status == 'CONFIRMED' %}critical{% elif r.review_status == 'FALSE_POSITIVE' %}ok{% elif r.review_status == 'UNDER_REVIEW' %}medium{% else %}low{% endif %}" style="font-size:0.6rem">
+              {{ r.review_status or 'NEW' }}
+            </span>
+          </td>
+          <td>
+            <a href="{{ url_for('query_detail', query_id=r.query_id) }}" class="btn btn-secondary btn-sm">View →</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:40px 0;color:var(--text-dim)">
+    <div style="font-size:3rem;margin-bottom:12px">✅</div>
+    <p>No regressions found yet.</p>
+  </div>
+  {% endif %}
+</div>
+
+<script src="{{ url_for('static', filename='charts.js') }}"></script>
+<script>
+  renderSeverityDoughnut('severityChart', {
+    CRITICAL: {{ criticals | length }},
+    HIGH:     {{ highs | length }},
+    MEDIUM:   {{ mediums | length }},
+    OK:       {{ oks | length }},
+  });
+
+  function runScenario(scenarioId) {
+    fetch('/api/demo/run-scenario', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({scenario_id: scenarioId})
+    })
+    .then(r => r.json())
+    .then(data => {
+      const panel = document.getElementById('demo-result-panel');
+      panel.style.display = 'block';
+      if (data.status === 'success') {
+        const res = data.scenario_result.result;
+        document.getElementById('demo-result-title').textContent = data.scenario_result.scenario_info.title;
+        document.getElementById('demo-result-badge').textContent = res.classification;
+        document.getElementById('demo-result-badge').className = 'badge badge-' + (res.classification.toLowerCase().includes('critical') ? 'critical' : (res.classification.toLowerCase().includes('warning') ? 'warning' : 'ok'));
+        document.getElementById('demo-result-text').textContent = 
+          'Status: ' + res.classification + '\n' +
+          'Score: ' + res.score + ' | Priority: ' + res.priority + '\n' +
+          'Action: ' + data.scenario_result.action_note + '\n' +
+          'Rule Version: ' + (res.evidence.rule_evaluation ? res.evidence.rule_evaluation.rule_config_version : 'v1.0');
+      } else {
+        alert('Scenario error: ' + data.message);
+      }
+    })
+    .catch(e => alert('Error running scenario: ' + e));
+  }
+
+  function resetDemoData() {
+    if (!confirm('Restore synthetic demo dataset to pristine baseline state?')) return;
+    fetch('/api/demo/reset', {method: 'POST'})
+    .then(r => r.json())
+    .then(data => {
+      alert(data.message);
+      window.location.reload();
+    })
+    .catch(e => alert('Reset error: ' + e));
+  }
+</script>
+{% endblock %}

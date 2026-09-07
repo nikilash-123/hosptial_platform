@@ -1,0 +1,299 @@
+{% extends "base.html" %}
+{% block title %}Detection Rules & Configuration{% endblock %}
+{% block page_title %}Configurable Priority & Rule Engine{% endblock %}
+{% block breadcrumb %}Configuration · rules.yaml · Version {{ config_version }}{% endblock %}
+
+{% block content %}
+
+{% if not is_dba %}
+<div class="alert alert-warning mb-16">
+  ⚠️ You are signed in as <strong>Release Engineer</strong> (read-only mode). Detection rules, priority weights, and thresholds can only be modified by a <strong>DBA Admin</strong>.
+</div>
+{% endif %}
+
+<!-- Version & Configuration Overview Banner -->
+<div class="card mb-24" style="border-left:4px solid var(--accent);background:linear-gradient(135deg, rgba(30,41,59,0.7), rgba(15,23,42,0.9))">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+    <div>
+      <div class="text-xs text-dim" style="text-transform:uppercase;letter-spacing:1px">Active Rule Engine Configuration</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+        <h2 style="margin:0;font-size:1.5rem;font-weight:700">Configuration Version: <span style="color:var(--accent2)">{{ config_version }}</span></h2>
+        <span class="pill" style="background:rgba(56,189,248,0.15);color:var(--accent2);border-color:rgba(56,189,248,0.3)">Deterministic Scoring</span>
+      </div>
+      <div class="text-sm text-dim" style="margin-top:6px">
+        All detection thresholds, multi-signal priority weights, and evidence requirements are externally configurable. No decisions are hard-coded in Python logic.
+      </div>
+    </div>
+    <div style="text-align:right">
+      <div class="text-xs text-dim">Governance Role</div>
+      <span class="pill" style="margin-top:4px;font-weight:600;{% if is_dba %}background:rgba(34,197,94,0.15);color:var(--ok);border-color:rgba(34,197,94,0.3){% else %}background:rgba(234,179,8,0.15);color:var(--warning);border-color:rgba(234,179,8,0.3){% endif %}">
+        {% if is_dba %}DBA Administrator (Read / Write){% else %}Engineering Reviewer (Read Only){% endif %}
+      </span>
+    </div>
+  </div>
+</div>
+
+<!-- Rule Breakdown Grid -->
+<div class="grid-3 mb-24">
+  <!-- Timing Thresholds -->
+  <div class="card">
+    <div class="card-title mb-12" style="display:flex;justify-content:space-between">
+      <span>⏱️ Execution Thresholds</span>
+      <span class="pill text-xs">Timing</span>
+    </div>
+    <table style="font-size:0.82rem;width:100%">
+      <tbody>
+        {% if rules_data.get('thresholds') %}
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Warning % Increase</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--warning);text-align:right">
+            {{ rules_data.thresholds.get('execution_time_regression_percent', rules_data.thresholds.get('time_regression_pct', 20)) }}%
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Critical % Increase</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--critical);text-align:right">
+            {{ rules_data.thresholds.get('critical_regression_percent', rules_data.thresholds.get('time_critical_pct', 100)) }}%
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Warning Absolute SLA</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--accent2);text-align:right">
+            {{ rules_data.thresholds.get('execution_time_warning_ms', rules_data.thresholds.get('absolute_high_ms', 500)) }} ms
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Critical Absolute SLA</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--critical);text-align:right">
+            {{ rules_data.thresholds.get('execution_time_critical_ms', rules_data.thresholds.get('absolute_critical_ms', 2000)) }} ms
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Minimum Meaningful</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--text-muted);text-align:right">
+            {{ rules_data.thresholds.get('minimum_meaningful_ms', 1.0) }} ms
+          </td>
+        </tr>
+        {% endif %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Priority Thresholds & Evidence -->
+  <div class="card">
+    <div class="card-title mb-12" style="display:flex;justify-content:space-between">
+      <span>🎯 Priority & Evidence</span>
+      <span class="pill text-xs">Scoring</span>
+    </div>
+    <table style="font-size:0.82rem;width:100%">
+      <tbody>
+        {% set pt = rules_data.get('priority_thresholds') or rules_data.get('score_thresholds') or {} %}
+        {% set ev = rules_data.get('evidence_requirements') or {} %}
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Warning Min Score</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--warning);text-align:right">{{ pt.get('warning_min_score', pt.get('warning_score', 25)) }}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">High Min Score</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--accent2);text-align:right">{{ pt.get('high_min_score', pt.get('regression_score', 50)) }}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Critical Min Score</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--critical);text-align:right">{{ pt.get('critical_min_score', pt.get('critical_regression_score', 75)) }}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Min Evidence (HIGH)</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--ok);text-align:right">{{ ev.get('min_evidence_for_high', 2) }} dimensions</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Min Evidence (CRITICAL)</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--critical);text-align:right">{{ ev.get('min_evidence_for_critical', 3) }} dimensions</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Insufficient Evidence Action</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--accent2);text-align:right">{{ ev.get('insufficient_evidence_action', 'MANUAL_REVIEW_REQUIRED') }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Multi-Signal Weights -->
+  <div class="card">
+    <div class="card-title mb-12" style="display:flex;justify-content:space-between">
+      <span>⚖️ Scoring Weights</span>
+      <span class="pill text-xs">Weights</span>
+    </div>
+    <table style="font-size:0.82rem;width:100%">
+      <tbody>
+        {% set sw = rules_data.get('scoring_weights', {}) %}
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Execution Time Regression</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--accent2);text-align:right">+{{ sw.get('execution_time', sw.get('performance_weight', 30)) }}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Plan Changed</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--accent2);text-align:right">+{{ sw.get('plan_change', sw.get('plan_weight', 25)) }}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Full Table Scan Introduced</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--critical);text-align:right">+{{ sw.get('full_table_scan', 25) }}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Supporting Index Removed</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--critical);text-align:right">+{{ sw.get('index_removed', sw.get('index_weight', 20)) }}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Stale Statistics Flagged</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--warning);text-align:right">+{{ sw.get('stale_statistics', sw.get('statistics_weight', 10)) }}</td>
+        </tr>
+        <tr>
+          <td style="padding:5px 0;color:var(--text-muted)">Recent Release / Schema Event</td>
+          <td style="padding:5px 0;font-weight:600;font-family:monospace;color:var(--accent2);text-align:right">+{{ sw.get('recent_release', sw.get('change_context_weight', 10)) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="grid-2 mb-24">
+  <!-- Plan, Stats, Workload & Index Rules -->
+  <div class="card">
+    <div class="card-title mb-12">Plan, Statistics & Workload Rules</div>
+    <table style="font-size:0.82rem;width:100%">
+      <tbody>
+        <tr>
+          <td style="padding:6px 0;color:var(--text-muted)">Plan Cost Increase Drift Threshold</td>
+          <td style="padding:6px 0;font-weight:600;font-family:monospace;color:var(--accent2);text-align:right">
+            {{ rules_data.get('plan_rules', {}).get('plan_cost_increase_percent', 30) }}%
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:var(--text-muted)">Statistics Staleness Limit</td>
+          <td style="padding:6px 0;font-weight:600;font-family:monospace;color:var(--warning);text-align:right">
+            {{ rules_data.get('stats_rules', {}).get('stale_statistics_days', rules_data.get('stats_rules', {}).get('stats_staleness_days_threshold', 7)) }} days
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:var(--text-muted)">Row Estimate Cardinality Drift Threshold</td>
+          <td style="padding:6px 0;font-weight:600;font-family:monospace;color:var(--accent2);text-align:right">
+            {{ rules_data.get('stats_rules', {}).get('flag_row_estimate_drift_pct', 50) }}%
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:var(--text-muted)">Workload Surge Variance Grace</td>
+          <td style="padding:6px 0;font-weight:600;font-family:monospace;color:var(--ok);text-align:right">
+            {{ rules_data.get('workload_rules', {}).get('workload_variance_pct', 40) }}%
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:6px 0;color:var(--text-muted)">Correlation Time Window</td>
+          <td style="padding:6px 0;font-weight:600;font-family:monospace;color:var(--text-muted);text-align:right">
+            {{ rules_data.get('change_correlation', {}).get('correlation_time_window_hours', 48) }} hours
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Role Capabilities -->
+  <div class="card">
+    <div class="card-title mb-12">Role Capabilities & Permissions</div>
+    <table style="font-size:0.82rem">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th>DBA Admin</th>
+          <th>Release Engineer</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set dba_caps = rules_data.get('roles', {}).get('dba_admin', {}) %}
+        {% set re_caps  = rules_data.get('roles', {}).get('release_engineer', {}) %}
+        {% for cap in dba_caps.keys() %}
+        <tr>
+          <td style="color:var(--text-muted)">{{ cap | replace('_', ' ') | title }}</td>
+          <td>{% if dba_caps[cap] %}<span style="color:var(--ok);font-weight:700">✓ Authorized</span>{% else %}<span style="color:var(--critical)">✗</span>{% endif %}</td>
+          <td>{% if re_caps.get(cap) %}<span style="color:var(--ok);font-weight:700">✓ Authorized</span>{% else %}<span style="color:var(--critical)">✗ Prohibited</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Configuration History / Audit Log -->
+<div class="card mb-24">
+  <div class="card-title mb-12" style="display:flex;justify-content:space-between;align-items:center">
+    <span>📜 Configuration Audit & Change History</span>
+    <span class="text-xs text-dim">{{ audit_history | length }} audit entries recorded</span>
+  </div>
+  {% if audit_history %}
+  <div class="table-container">
+    <table style="font-size:0.82rem;width:100%">
+      <thead>
+        <tr>
+          <th>Audit ID</th>
+          <th>Version</th>
+          <th>Changed By</th>
+          <th>Role</th>
+          <th>Timestamp</th>
+          <th>Modified Sections / Details</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in audit_history %}
+        <tr>
+          <td style="font-family:monospace;font-weight:600">AUD-{{ a.audit_id }}</td>
+          <td><span class="pill" style="background:rgba(56,189,248,0.15);color:var(--accent2);border-color:rgba(56,189,248,0.3)">{{ a.config_version or 'v1.0' }}</span></td>
+          <td style="font-weight:600">{{ a.changed_by }}</td>
+          <td><span class="text-xs text-dim">{{ a.role }}</span></td>
+          <td style="color:var(--text-muted);white-space:nowrap">{{ a.changed_at[:19].replace('T', ' ') }}</td>
+          <td>
+            {% if a.changed_fields %}
+              {% for f in a.changed_fields %}
+              <span class="pill text-xs" style="margin-right:4px">{{ f }}</span>
+              {% endfor %}
+            {% else %}
+              <span class="text-xs text-dim">{{ a.previous_value }} → {{ a.new_value }}</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="text-xs text-dim">No historical configuration changes recorded in this session.</div>
+  {% endif %}
+</div>
+
+<!-- Rules YAML Editor -->
+<div class="card">
+  <div class="card-title mb-12" style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      rules.yaml
+      {% if is_dba %}
+      <span class="pill" style="margin-left:8px;background:rgba(34,197,94,0.1);color:var(--ok);border-color:rgba(34,197,94,0.3)">Editable (DBA Admin)</span>
+      {% else %}
+      <span class="pill" style="margin-left:8px;background:rgba(234,179,8,0.1);color:var(--warning);border-color:rgba(234,179,8,0.3)">Read-only (Release Engineer)</span>
+      {% endif %}
+    </div>
+    <span class="text-xs text-dim">Changes persist to server and update rule configuration version</span>
+  </div>
+
+  <form method="POST" action="{{ url_for('rules') }}">
+    <textarea id="rules-editor"
+              name="rules_yaml"
+              class="rules-textarea"
+              style="min-height:350px;font-family:monospace;font-size:0.85rem"
+              {% if not is_dba %}disabled{% endif %}>{{ rules_yaml }}</textarea>
+
+    {% if is_dba %}
+    <div style="margin-top:14px;display:flex;gap:12px;align-items:center">
+      <button id="save-rules-btn" type="submit" class="btn btn-primary">💾 Save Configuration</button>
+      <span class="text-xs text-dim">All changes validate percentages &gt;= 0, logical ordering of score thresholds, and generate an audit trail.</span>
+    </div>
+    {% endif %}
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,222 @@
+{% extends "base.html" %}
+{% block title %}Regressions{% endblock %}
+{% block page_title %}Regression Findings{% endblock %}
+{% block breadcrumb %}Analysis · Multi-Signal Query Regression Findings with Context{% endblock %}
+
+{% block content %}
+
+<!-- Multi-Facet Filter Panel -->
+<div class="card mb-16" style="padding:16px 20px;background:var(--bg-card)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <div style="font-weight:700;font-size:0.95rem;color:var(--text-primary);display:flex;align-items:center;gap:8px">
+      <span>🔍 Multi-Signal Facet Filters</span>
+      <span class="badge badge-indigo" style="font-size:0.7rem">{{ regressions | length }} of {{ total_count }} Shown</span>
+    </div>
+    <div>
+      <a href="{{ url_for('regressions') }}" class="btn btn-secondary btn-sm" style="font-size:0.75rem">↺ Reset All Filters</a>
+    </div>
+  </div>
+
+  <!-- Primary Severity Filter Pills -->
+  <div class="filter-bar mb-12" style="display:flex;flex-wrap:wrap;gap:6px">
+    {% for sev in ['ALL', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'OK'] %}
+    <a href="{{ url_for('regressions', severity=sev, query_type=type_filter, release=rel_filter, review_status=stat_filter, plan_changed=plan_filter, index_changed=idx_filter) }}"
+       id="filter-{{ sev | lower }}"
+       class="filter-btn {% if sev_filter == sev %}active{% endif %}">
+      {% if sev == 'CRITICAL' %}🔴{% elif sev == 'HIGH' %}🟠{% elif sev == 'MEDIUM' %}🟡{% elif sev == 'OK' %}✅{% elif sev == 'ALL' %}📋{% else %}⚪{% endif %}
+      {{ sev }}
+      {% if sev != 'ALL' %}({{ severity_counts.get(sev, 0) }}){% endif %}
+    </a>
+    {% endfor %}
+  </div>
+
+  <!-- Secondary Facet Selectors Form -->
+  <form method="GET" action="{{ url_for('regressions') }}" style="display:grid;grid-template-columns:repeat(auto-fit, minmax(170px, 1fr));gap:10px;align-items:end">
+    <input type="hidden" name="severity" value="{{ sev_filter }}">
+    <div>
+      <label class="text-xs text-dim" style="display:block;margin-bottom:4px">Query Type / ID</label>
+      <select name="query_type" class="form-control" style="width:100%;padding:6px 10px;font-size:0.8rem;background:var(--bg-card2);color:var(--text-primary);border:1px solid var(--border);border-radius:6px" onchange="this.form.submit()">
+        <option value="ALL" {% if type_filter == 'ALL' %}selected{% endif %}>All Query Types</option>
+        {% for t in all_types %}
+        <option value="{{ t }}" {% if type_filter == t %}selected{% endif %}>{{ t }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="text-xs text-dim" style="display:block;margin-bottom:4px">Release Version</label>
+      <select name="release" class="form-control" style="width:100%;padding:6px 10px;font-size:0.8rem;background:var(--bg-card2);color:var(--text-primary);border:1px solid var(--border);border-radius:6px" onchange="this.form.submit()">
+        <option value="ALL" {% if rel_filter == 'ALL' %}selected{% endif %}>All Releases</option>
+        {% for rel in all_releases %}
+        <option value="{{ rel }}" {% if rel_filter == rel %}selected{% endif %}>{{ rel }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div>
+      <label class="text-xs text-dim" style="display:block;margin-bottom:4px">Review Status</label>
+      <select name="review_status" class="form-control" style="width:100%;padding:6px 10px;font-size:0.8rem;background:var(--bg-card2);color:var(--text-primary);border:1px solid var(--border);border-radius:6px" onchange="this.form.submit()">
+        <option value="ALL" {% if stat_filter == 'ALL' %}selected{% endif %}>All Review Statuses</option>
+        <option value="NEW" {% if stat_filter == 'NEW' %}selected{% endif %}>NEW</option>
+        <option value="UNDER_REVIEW" {% if stat_filter == 'UNDER_REVIEW' %}selected{% endif %}>UNDER_REVIEW</option>
+        <option value="CONFIRMED" {% if stat_filter == 'CONFIRMED' %}selected{% endif %}>CONFIRMED</option>
+        <option value="FALSE_POSITIVE" {% if stat_filter == 'FALSE_POSITIVE' %}selected{% endif %}>FALSE_POSITIVE</option>
+        <option value="RESOLVED" {% if stat_filter == 'RESOLVED' %}selected{% endif %}>RESOLVED</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="text-xs text-dim" style="display:block;margin-bottom:4px">Plan Shift (Δ)</label>
+      <select name="plan_changed" class="form-control" style="width:100%;padding:6px 10px;font-size:0.8rem;background:var(--bg-card2);color:var(--text-primary);border:1px solid var(--border);border-radius:6px" onchange="this.form.submit()">
+        <option value="ALL" {% if plan_filter == 'ALL' %}selected{% endif %}>Any Plan State</option>
+        <option value="yes" {% if plan_filter == 'yes' %}selected{% endif %}>Plan Changed (Degraded/Scan)</option>
+        <option value="no" {% if plan_filter == 'no' %}selected{% endif %}>Plan Preserved</option>
+      </select>
+    </div>
+
+    <div>
+      <label class="text-xs text-dim" style="display:block;margin-bottom:4px">Index Missing / Lost</label>
+      <select name="index_changed" class="form-control" style="width:100%;padding:6px 10px;font-size:0.8rem;background:var(--bg-card2);color:var(--text-primary);border:1px solid var(--border);border-radius:6px" onchange="this.form.submit()">
+        <option value="ALL" {% if idx_filter == 'ALL' %}selected{% endif %}>Any Index State</option>
+        <option value="yes" {% if idx_filter == 'yes' %}selected{% endif %}>Index Lost / Unused ⚠️</option>
+        <option value="no" {% if idx_filter == 'no' %}selected{% endif %}>Index Stable</option>
+      </select>
+    </div>
+  </form>
+</div>
+
+{% if regressions %}
+<div class="card">
+  <div class="card-title mb-12" style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      Regressions
+      {% if sev_filter != 'ALL' %}filtered by <span class="badge badge-{{ sev_filter | lower }}">{{ sev_filter }}</span>{% endif %}
+      — {{ regressions | length }} findings
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Severity</th>
+          <th>Query ID & Workload</th>
+          <th>Score</th>
+          <th>Δ p95</th>
+          <th>% Change</th>
+          <th>Plan Δ</th>
+          <th>Index Δ</th>
+          <th>Review</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in regressions %}
+        <tr>
+          <td class="text-dim text-xs">{{ r.regression_id }}</td>
+          <td><span class="badge badge-{{ r.severity | lower }}">{{ r.severity }}</span></td>
+          <td>
+            <a href="{{ url_for('query_detail', query_id=r.query_id) }}" style="color:var(--accent);text-decoration:none;font-weight:600">
+              <span class="mono">{{ r.query_id }}</span>
+            </a>
+            {% if r.is_double_booking %}
+            <span class="badge" style="background:rgba(239,68,68,0.2);color:#fca5a5;border:1px solid #ef4444;font-size:0.6rem;padding:2px 5px;margin-left:4px" title="Double-booking sensitive query workflow">🔒 Double-Booking Path</span>
+            {% endif %}
+            <br>
+            <span class="text-xs text-dim">{{ r.query_label[:42] }}{% if r.query_label | length > 42 %}…{% endif %}</span>
+          </td>
+          <td>
+            <span style="font-weight:700;font-size:0.88rem;color:{% if r.severity == 'CRITICAL' %}var(--critical){% elif r.severity == 'HIGH' %}var(--high){% elif r.severity == 'MEDIUM' %}var(--medium){% else %}var(--ok){% endif %}">
+              {{ '%.1f' % (r.get('regression_score') if r.get('regression_score') is not none else (85.0 if r.severity == 'CRITICAL' else (65.0 if r.severity == 'HIGH' else 35.0))) }}
+            </span>
+          </td>
+          <td class="text-sm">
+            {{ '+' if r.delta_ms_p95 > 0 else '' }}{{ '%.2f' % r.delta_ms_p95 }} ms
+          </td>
+          <td class="text-sm">
+            <span style="font-weight:600;color:{% if r.pct_change > 100 %}var(--critical){% elif r.pct_change > 30 %}var(--high){% else %}var(--text-primary){% endif %}">
+              {{ '+' if r.pct_change > 0 else '' }}{{ '%.1f' % r.pct_change }}%
+            </span>
+          </td>
+          <td class="text-xs">
+            {% if r.plan_changed %}
+            <span style="color:var(--high);font-weight:600">⚠️ Degraded</span>
+            {% else %}
+            <span class="text-dim">Preserved</span>
+            {% endif %}
+          </td>
+          <td class="text-xs">
+            {% if r.index_lost %}
+            <span style="color:var(--critical);font-weight:600">⚠️ Lost</span>
+            {% else %}
+            <span class="text-dim">Optimal</span>
+            {% endif %}
+          </td>
+          <td>
+            <span class="badge badge-{% if r.review_status == 'CONFIRMED' %}critical{% elif r.review_status == 'FALSE_POSITIVE' %}ok{% elif r.review_status == 'UNDER_REVIEW' %}medium{% elif r.review_status == 'RESOLVED' %}ok{% else %}low{% endif %}" style="font-size:0.65rem">
+              {{ r.review_status or 'NEW' }}
+            </span>
+            {% if r.reviewed_by %}
+            <div class="text-xs text-dim" style="font-size:0.65rem">{{ r.reviewed_by }}</div>
+            {% endif %}
+          </td>
+          <td>
+            <div style="display:flex;gap:6px;flex-wrap:wrap">
+              <a href="{{ url_for('query_detail', query_id=r.query_id) }}" class="btn btn-secondary btn-sm">Detail</a>
+              {% if can('can_mark_false_positive') %}
+              <button id="fp-btn-{{ r.regression_id }}"
+                      class="btn btn-sm {% if r.is_false_pos %}btn-danger{% else %}btn-secondary{% endif %}"
+                      onclick="markFP({{ r.regression_id }}, {{ 'false' if r.is_false_pos else 'true' }})"
+                      title="Toggle False Positive">
+                {% if r.is_false_pos %}✓ FP{% else %}FP?{% endif %}
+              </button>
+              <button id="fn-btn-{{ r.regression_id }}"
+                      class="btn btn-sm {% if r.is_false_neg %}btn-danger{% else %}btn-secondary{% endif %}"
+                      onclick="markFN({{ r.regression_id }}, {{ 'false' if r.is_false_neg else 'true' }})"
+                      title="Toggle False Negative">
+                {% if r.is_false_neg %}✓ FN{% else %}FN?{% endif %}
+              </button>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+
+        <!-- Evidence inline expand for HIGH/CRITICAL -->
+        {% if r.severity in ['CRITICAL', 'HIGH'] and r.evidence_parsed %}
+        <tr style="background:rgba(99,102,241,0.03)">
+          <td colspan="10" style="padding:10px 14px">
+            <div class="evidence-box">
+              <div class="evidence-label">📋 Root Cause & Recommendations</div>
+              <div class="grid-2" style="gap:12px">
+                <div>
+                  <span class="text-xs text-dim">Primary Recommendation:</span><br>
+                  <span class="text-sm">{{ r.evidence_parsed.get('recommendation', 'N/A') }}</span>
+                </div>
+                <div>
+                  <span class="text-xs text-dim">Plan Shift Summary:</span><br>
+                  <span class="text-sm">{{ r.evidence_parsed.get('plan', {}).get('diff_summary', 'N/A') }}</span>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% endif %}
+
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+{% else %}
+<div class="card" style="text-align:center;padding:48px">
+  <div style="font-size:3rem;margin-bottom:14px">✅</div>
+  <p class="text-muted">No regressions found{% if sev_filter != 'ALL' %} with severity {{ sev_filter }}{% endif %}.</p>
+  <div style="margin-top:16px">
+    <a href="{{ url_for('regressions') }}" class="btn btn-secondary btn-sm">Clear Active Filters</a>
+  </div>
+</div>
+{% endif %}
+
+<script src="{{ url_for('static', filename='charts.js') }}"></script>
+{% endblock %}

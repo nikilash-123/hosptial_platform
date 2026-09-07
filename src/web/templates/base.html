@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Hospital Appointment Query Regression Detector — detects slow-query regressions before user impact">
+  <title>{% block title %}QRD{% endblock %} — Hospital Query Regression Detector</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="layout">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <a class="logo" href="{{ url_for('dashboard') }}">
+        <div class="logo-icon">🏥</div>
+        <div class="logo-text">
+          <div class="logo-title">QR Detector</div>
+          <div class="logo-sub">Hospital Appointments</div>
+        </div>
+      </a>
+    </div>
+
+    <nav class="sidebar-nav">
+      <div class="nav-section-label">Overview</div>
+      <a href="{{ url_for('dashboard') }}"   class="nav-item {% if request.endpoint == 'dashboard'   %}active{% endif %}">
+        <span class="nav-icon">📊</span> Dashboard
+      </a>
+
+      <div class="nav-section-label">Data</div>
+      <a href="{{ url_for('baselines') }}"   class="nav-item {% if request.endpoint == 'baselines'   %}active{% endif %}">
+        <span class="nav-icon">📌</span> Baselines
+      </a>
+      <a href="{{ url_for('runs') }}"        class="nav-item {% if request.endpoint == 'runs'        %}active{% endif %}">
+        <span class="nav-icon">🚀</span> Release Runs
+      </a>
+
+      <div class="nav-section-label">Analysis</div>
+      <a href="{{ url_for('regressions') }}" class="nav-item {% if request.endpoint == 'regressions' %}active{% endif %}">
+        <span class="nav-icon">⚠️</span> Regressions
+      </a>
+      <a href="{{ url_for('evaluation') }}"  class="nav-item {% if request.endpoint == 'evaluation'  %}active{% endif %}">
+        <span class="nav-icon">🔬</span> Evaluation
+      </a>
+      <a href="{{ url_for('validation') }}"  class="nav-item {% if request.endpoint == 'validation'  %}active{% endif %}">
+        <span class="nav-icon">👥</span> Validation
+      </a>
+
+      <div class="nav-section-label">Configuration</div>
+      <a href="{{ url_for('rules') }}"       class="nav-item {% if request.endpoint == 'rules'       %}active{% endif %}">
+        <span class="nav-icon">⚙️</span> Rules
+        {% if current_user().role != 'dba_admin' %}
+        <span class="pill" style="margin-left:auto;font-size:0.6rem">Read-only</span>
+        {% endif %}
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <div class="user-avatar">{{ current_user().display_name[0] }}</div>
+        <div>
+          <div class="user-name">{{ current_user().display_name }}</div>
+          <div class="user-role">{{ current_user().role | replace('_',' ') | title }}</div>
+        </div>
+      </div>
+      <a href="{{ url_for('logout') }}" class="logout-btn">↩ Logout</a>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main-content">
+    <div class="topbar">
+      <div>
+        <h1>{% block page_title %}Dashboard{% endblock %}</h1>
+        <div class="topbar-breadcrumb">{% block breadcrumb %}Hospital Appointment Query Regression Detector{% endblock %}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span class="live-dot"></span>
+        <span class="pill" style="font-size:0.75rem;font-weight:600;{% if current_user().role == 'dba_admin' %}background:rgba(34,197,94,0.15);color:var(--ok);border-color:rgba(34,197,94,0.3){% else %}background:rgba(234,179,8,0.15);color:var(--warning);border-color:rgba(234,179,8,0.3){% endif %}">
+          👤 {{ current_user().role | replace('_',' ') | title }}
+        </span>
+        <span class="text-dim text-xs">
+          <a href="{{ url_for('login') }}" style="color:var(--accent);text-decoration:none">Switch Persona ⇄</a>
+        </span>
+      </div>
+    </div>
+
+    <!-- Flash messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+      <div class="flash-container" style="padding-top:16px">
+        {% for cat, msg in messages %}
+        <div class="alert alert-{{ cat }}">
+          {% if cat == 'success' %}✅{% elif cat == 'danger' %}❌{% elif cat == 'warning' %}⚠️{% else %}ℹ️{% endif %}
+          {{ msg }}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="page-body">
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+
+</div>
+</body>
+</html>
