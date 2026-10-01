@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+*.db
+!data/synthetic_dataset.db
+.pytest_cache/

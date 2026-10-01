@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% block title %}DBA Performance Workbench{% endblock %}
+{% block page_title %}DBA Performance Workbench{% endblock %}
+{% block breadcrumb %}Role Workspace · Database Internals, Query Plans & Statistics Telemetry{% endblock %}
+
+{% block content %}
+
+<!-- Header Summary Card -->
+<div class="card mb-24" style="border-left: 4px solid var(--ok); background: linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(59,130,246,0.04) 100%);">
+  <div class="d-flex justify-between items-center mb-12" style="flex-wrap:wrap;gap:12px">
+    <div>
+      <span class="badge badge-ok mb-4">ROLE: DATABASE ADMINISTRATOR (DBA)</span>
+      <h2 style="margin:4px 0 6px 0;font-size:1.3rem;color:var(--text-bright)">
+        🛠️ Database Performance & Telemetry Workbench
+      </h2>
+      <p class="text-sm text-muted" style="margin:0;max-width:760px">
+        Inspect deep execution plans (EXPLAIN / EXPLAIN ANALYZE), examine access paths and buffer hits, audit index utilization and table cardinality histograms, and investigate detected regressions.
+      </p>
+    </div>
+    <div class="d-flex gap-8 items-center">
+      <span class="badge badge-info" style="font-size:0.9rem;padding:8px 14px">
+        Active Engine: {{ db_stats.engine or 'SQLite / PostgreSQL Dual' }}
+      </span>
+    </div>
+  </div>
+
+  <div class="stats-grid mt-16" style="grid-template-columns: repeat(4, 1fr); gap: 14px;">
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Monitored Tables</div>
+      <div class="stat-value" style="font-size:1.4rem;color:var(--ok)">{{ db_stats.tables | length }}</div>
+      <div class="text-xs text-dim mt-4">Database relations</div>
+    </div>
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Total Active Indexes</div>
+      <div class="stat-value" style="font-size:1.4rem;color:var(--accent)">{{ db_stats.indexes | length }}</div>
+      <div class="text-xs text-dim mt-4">Composite & unique indexes</div>
+    </div>
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Total Database Size</div>
+      <div class="stat-value" style="font-size:1.4rem;color:var(--text-bright)">
+        {{ '%.2f' % (db_stats.db_size_bytes / (1024*1024)) }} MB
+      </div>
+      <div class="text-xs text-dim mt-4">Storage volume</div>
+    </div>
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Index-Related Regressions</div>
+      <div class="stat-value {% if index_issues > 0 %}critical{% else %}ok{% endif %}" style="font-size:1.4rem">
+        {{ index_issues }}
+      </div>
+      <div class="text-xs text-dim mt-4">Dropped or missing indexes</div>
+    </div>
+  </div>
+</div>
+
+<!-- 1. Live Query Plan Inspector (Interactive EXPLAIN) -->
+<div class="card mb-24">
+  <div class="card-title mb-8">🔬 Live EXPLAIN & Query Plan Inspector</div>
+  <p class="text-xs text-muted mb-16">
+    Execute real-time query plan inspection across the active hospital database engine. Parses scan types, index usage, estimated cost, and row cardinality.
+  </p>
+
+  <form id="explain-form" onsubmit="runLiveExplain(event)" class="mb-16">
+    <div class="mb-12">
+      <label class="text-xs text-dim fw-600 mb-6 block">Select Preset Clinical Probe Query or Enter Custom SQL:</label>
+      <select id="preset-sql" onchange="loadPresetSql()" class="form-control mb-8" style="background:var(--bg-card2);color:var(--text-bright);padding:8px;border-radius:6px;border:1px solid var(--border);width:100%">
+        <option value="">-- Choose Preset Probe Query --</option>
+        {% for q in probe_queries %}
+        <option value="{{ q.sql }}">{{ q.id }} — {{ q.label }}</option>
+        {% endfor %}
+      </select>
+      <textarea id="sql-input" rows="4" class="form-control mono text-xs" style="width:100%;background:var(--bg-card2);color:var(--text-bright);padding:10px;border-radius:6px;border:1px solid var(--border)" placeholder="SELECT appt_id, appt_time FROM appointments WHERE doctor_id = 'SYNTH-D-001' AND appt_date = '2026-09-15' AND status = 'SCHEDULED';"></textarea>
+    </div>
+    <div class="d-flex justify-between items-center">
+      <label class="text-xs text-dim d-flex items-center gap-6">
+        <input type="checkbox" id="analyze-check" checked> Run EXPLAIN ANALYZE (Executes statement to measure actual execution time and rows)
+      </label>
+      <button type="submit" class="btn btn-primary btn-sm" id="btn-run-explain">Execute EXPLAIN ➔</button>
+    </div>
+  </form>
+
+  <div id="explain-results" style="display:none;background:var(--bg-card2);border:1px solid var(--border);border-radius:var(--radius);padding:16px">
+    <div class="d-flex justify-between items-center mb-12">
+      <div class="d-flex items-center gap-8">
+        <span class="badge" id="res-scan-badge">SCAN TYPE</span>
+        <span class="mono text-xs text-dim" id="res-engine">Engine: SQLite</span>
+      </div>
+      <div class="mono text-xs text-dim" id="res-metrics">Cost: 0.0 | Rows: 0</div>
+    </div>
+    <div class="grid-3 mb-12 text-xs" style="gap:10px;background:var(--bg-card);padding:10px;border-radius:6px">
+      <div><span class="text-dim">Estimated Cost:</span> <strong id="res-cost">0.0</strong></div>
+      <div><span class="text-dim">Rows Examined / Plan:</span> <strong id="res-rows">0</strong></div>
+      <div><span class="text-dim">Indexes Utilized:</span> <strong id="res-indexes">None</strong></div>
+    </div>
+    <div class="mb-8 text-xs text-dim fw-600">Normalized Execution Plan Output:</div>
+    <pre id="res-plan-text" class="mono text-xs" style="background:var(--bg-card);padding:12px;border-radius:6px;overflow-x:auto;color:var(--text-bright);max-height:220px"></pre>
+  </div>
+</div>
+
+<!-- 2. Table Cardinality & Statistics Catalog -->
+<div class="grid-2 mb-24">
+  <!-- Table Statistics -->
+  <div class="card">
+    <div class="card-title mb-12">📈 Table Cardinality & Scan Metrics</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Table Name</th>
+            <th>Row Count</th>
+            <th>Scan Status</th>
+            <th>Statistics Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tbl_name, t in db_stats.tables.items() %}
+          <tr>
+            <td><span class="mono fw-700">{{ tbl_name }}</span></td>
+            <td class="mono">{{ '{:,}'.format(t.row_count) if t.row_count >= 0 else 'N/A' }}</td>
+            <td>
+              {% if t.seq_scan is defined and t.seq_scan > 50 %}
+              <span class="badge badge-warning">{{ t.seq_scan }} Seq Scans</span>
+              {% elif t.idx_scan is defined %}
+              <span class="badge badge-ok">{{ t.idx_scan }} Idx Scans</span>
+              {% else %}
+              <span class="badge badge-low">Normal</span>
+              {% endif %}
+            </td>
+            <td>
+              {% if t.is_stale %}
+              <span class="badge badge-critical">STALE ({{ t.stats_age_days }}d)</span>
+              {% else %}
+              <span class="badge badge-ok">CURRENT</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Index Catalog -->
+  <div class="card">
+    <div class="card-title mb-12">🔑 Supporting Indexes & Unique Constraints</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Index Name</th>
+            <th>Target Table</th>
+            <th>Type</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for idx in db_stats.indexes %}
+          <tr>
+            <td><span class="mono text-sm fw-600">{{ idx.name }}</span></td>
+            <td><span class="mono text-muted">{{ idx.table }}</span></td>
+            <td>
+              {% if idx.unique %}
+              <span class="badge badge-critical" style="font-size:0.65rem">UNIQUE (ANTI DOUBLE-BOOK)</span>
+              {% else %}
+              <span class="badge badge-info" style="font-size:0.65rem">INDEX</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- 3. Active Regressions Pending DBA Remediation -->
+<div class="card">
+  <div class="d-flex justify-between items-center mb-12">
+    <div>
+      <div class="card-title" style="margin:0">🔍 Detected Regressions Requiring DBA Investigation</div>
+      <div class="text-xs text-dim mt-2">Correlated regressions with access path shifts and optimizer index recommendations</div>
+    </div>
+    <a href="{{ url_for('regressions') }}" class="btn btn-secondary btn-sm">All Findings →</a>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Query ID</th>
+          <th>Query Label</th>
+          <th>Severity</th>
+          <th>Plan Degradation</th>
+          <th>Latency Surge</th>
+          <th>Index Impact</th>
+          <th>Remediation Advice</th>
+          <th>Investigate</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for reg in regressions[:6] %}
+        <tr>
+          <td><span class="mono fw-700">{{ reg.query_id }}</span></td>
+          <td class="fw-600 text-sm">
+            {{ reg.query_label }}
+            {% if reg.is_double_booking %}
+            <span class="badge badge-critical" style="font-size:0.6rem">ANTI DOUBLE-BOOK</span>
+            {% endif %}
+          </td>
+          <td><span class="badge badge-{{ reg.severity | lower }}">{{ reg.severity }}</span></td>
+          <td class="text-xs mono text-danger">{{ reg.plan_diff }}</td>
+          <td class="mono {% if reg.pct_change > 50 %}text-danger{% else %}text-warning{% endif %}">
+            +{{ reg.pct_change }}%
+          </td>
+          <td class="text-xs text-muted">{{ reg.index_impact }}</td>
+          <td class="text-xs text-muted" style="max-width:260px">
+            {{ reg.evidence_summary or 'Review supporting index definition and re-run ANALYZE.' }}
+          </td>
+          <td>
+            <a href="{{ url_for('query_detail', query_id=reg.query_id) }}" class="btn btn-secondary btn-sm">Drill Down</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+function loadPresetSql() {
+  const sel = document.getElementById("preset-sql");
+  const txt = document.getElementById("sql-input");
+  if (sel.value) {
+    txt.value = sel.value.trim();
+  }
+}
+
+async function runLiveExplain(e) {
+  e.preventDefault();
+  const sql = document.getElementById("sql-input").value.trim();
+  const analyze = document.getElementById("analyze-check").checked;
+  const resPanel = document.getElementById("explain-results");
+  if (!sql) return;
+
+  const btn = document.getElementById("btn-run-explain");
+  btn.disabled = true;
+  btn.innerText = "Analyzing...";
+
+  try {
+    const resp = await fetch("{{ url_for('api_explain') }}", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({sql: sql, analyze: analyze})
+    });
+    const data = await resp.json();
+    if (data.status === "success") {
+      resPanel.style.display = "block";
+      const plan = data.plan;
+      document.getElementById("res-scan-badge").innerText = plan.scan_type || "SCAN";
+      document.getElementById("res-scan-badge").className = "badge " + (plan.has_full_scan ? "badge-critical" : "badge-ok");
+      document.getElementById("res-engine").innerText = "Engine: " + (data.db_type || "SQLite");
+      document.getElementById("res-cost").innerText = plan.estimated_cost || "N/A";
+      document.getElementById("res-rows").innerText = (plan.actual_rows !== undefined && plan.actual_rows !== 0) ? (plan.estimated_rows + " est / " + plan.actual_rows + " actual") : (plan.estimated_rows || 0);
+      document.getElementById("res-indexes").innerText = (plan.index_names && plan.index_names.length) ? plan.index_names.join(", ") : "None";
+      document.getElementById("res-plan-text").innerText = plan.raw || JSON.stringify(plan.nodes, null, 2);
+    } else {
+      alert("Error executing EXPLAIN: " + data.message);
+    }
+  } catch (err) {
+    alert("Network error: " + err);
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "Execute EXPLAIN ➔";
+  }
+}
+</script>
+
+{% endblock %}

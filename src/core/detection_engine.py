@@ -522,6 +522,7 @@ def detect_query_regression(
         "query_name": qname,
         "query_type": qtype,
         "is_regression": severity != "OK",
+        "has_regression": severity != "OK",
         "classification": label,
         "regression_label": label,
         "severity": severity,

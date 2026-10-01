@@ -77,7 +77,8 @@ class RuleEngine:
         # ── 1. Execution Time Percentage Regression ───────────────────────────
         b_ms = float(signals.get("baseline_exec_ms", ctx.get("baseline_execution_time", 1.0)) or 1.0)
         a_ms = float(signals.get("current_exec_ms", ctx.get("current_execution_time", 0.0)) or 0.0)
-        time_pct = float(signals.get("time_pct_change", 0.0))
+        time_pct_raw = signals.get("time_pct_change", 0.0)
+        time_pct = float(time_pct_raw) if time_pct_raw is not None else 0.0
         if time_pct == 0.0 and b_ms > 0 and a_ms > 0:
             time_pct = round((a_ms - b_ms) / b_ms * 100.0, 2)
 
@@ -206,6 +207,33 @@ class RuleEngine:
                 "points": pts,
                 "condition": f"Optimizer estimated cost grew by {cost_drift:.1f}% (threshold: {cost_thresh}%)",
                 "details": {"cost_increase_pct": f"{cost_drift:.1f}%"}
+            })
+
+        # ── 5b. Estimated & Actual Row Differences ───────────────────────────
+        rows_thresh = rules_loader.get_threshold(self.rules, "estimated_rows_increase_threshold", 50.0)
+        est_rows_drift = float(signals.get("estimated_rows_drift_pct", signals.get("rows_examined_drift_pct", 0.0)))
+        if signals.get("estimated_rows_increased") or est_rows_drift >= rows_thresh:
+            pts = round(w_plan * 0.3, 1)
+            score_breakdown["plan"] += pts
+            triggered_rules.append({
+                "rule_name": "estimated_rows_increased",
+                "display_name": "Cardinality estimate drift",
+                "points": pts,
+                "condition": f"Planner estimated rows grew by {est_rows_drift:.1f}% (threshold: {rows_thresh}%)",
+                "details": {"estimated_rows_increase_pct": f"{est_rows_drift:.1f}%"}
+            })
+
+        act_rows_thresh = rules_loader.get_threshold(self.rules, "actual_rows_increase_threshold", 50.0)
+        act_rows_drift = float(signals.get("actual_rows_drift_pct", 0.0))
+        if signals.get("actual_rows_increased") or act_rows_drift >= act_rows_thresh:
+            pts = round(w_plan * 0.3, 1)
+            score_breakdown["plan"] += pts
+            triggered_rules.append({
+                "rule_name": "actual_rows_increased",
+                "display_name": "Actual rows surge",
+                "points": pts,
+                "condition": f"Actual execution rows returned/examined grew by {act_rows_drift:.1f}% (threshold: {act_rows_thresh}%)",
+                "details": {"actual_rows_increase_pct": f"{act_rows_drift:.1f}%"}
             })
 
         # ── 6. Index Removed / Modified / Missing ─────────────────────────────
@@ -370,9 +398,9 @@ class RuleEngine:
 
         if total_score >= crit_min or a_ms >= abs_crit_ms:
             tentative_severity = "CRITICAL"
-        elif total_score >= high_min or (time_increased and time_pct >= 50.0):
+        elif not signals.get("is_workload_grace", False) and (total_score >= high_min or (time_increased and time_pct >= 50.0)):
             tentative_severity = "HIGH"
-        elif total_score >= warn_min or time_increased or signals.get("statistics_stale"):
+        elif not signals.get("is_workload_grace", False) and (total_score >= warn_min or time_increased or signals.get("statistics_stale")):
             tentative_severity = "WARNING"
         else:
             tentative_severity = "NORMAL"
@@ -430,7 +458,7 @@ class RuleEngine:
         }
 
         if tentative_severity == "CRITICAL":
-            if evidence_count < min_crit:
+            if evidence_count < min_crit and not signals.get("is_double_booking_critical", False):
                 final_priority = fallback_action
                 evidence_sufficiency = {
                     "sufficient": False,

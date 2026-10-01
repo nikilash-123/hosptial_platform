@@ -48,6 +48,14 @@
         <span class="nav-icon">👥</span> Validation
       </a>
 
+      <div class="nav-section-label">Role Workspaces</div>
+      <a href="{{ url_for('release_manager_view') }}" class="nav-item {% if request.endpoint == 'release_manager_view' %}active{% endif %}">
+        <span class="nav-icon">📋</span> Release Manager
+      </a>
+      <a href="{{ url_for('dba_workbench_view') }}" class="nav-item {% if request.endpoint == 'dba_workbench_view' %}active{% endif %}">
+        <span class="nav-icon">🛠️</span> DBA Workbench
+      </a>
+
       <div class="nav-section-label">Configuration</div>
       <a href="{{ url_for('rules') }}"       class="nav-item {% if request.endpoint == 'rules'       %}active{% endif %}">
         <span class="nav-icon">⚙️</span> Rules

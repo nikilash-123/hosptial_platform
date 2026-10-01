@@ -1,0 +1,267 @@
+{% extends "base.html" %}
+{% block title %}Release Manager Cockpit{% endblock %}
+{% block page_title %}Release Manager Cockpit{% endblock %}
+{% block breadcrumb %}Role Workspace · Pre-Release Performance Comparison & Deployment Gate{% endblock %}
+
+{% block content %}
+
+<!-- Header Summary Card -->
+<div class="card mb-24" style="border-left: 4px solid var(--accent); background: linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(168,85,247,0.04) 100%);">
+  <div class="d-flex justify-between items-center mb-12" style="flex-wrap:wrap;gap:12px">
+    <div>
+      <span class="badge badge-info mb-4">ROLE: RELEASE MANAGER</span>
+      <h2 style="margin:4px 0 6px 0;font-size:1.3rem;color:var(--text-bright)">
+        🚦 Release Deployment Performance Gate
+      </h2>
+      <p class="text-sm text-muted" style="margin:0;max-width:760px">
+        Compare pre-release baseline performance against post-release canary benchmarks, review high-priority regression alerts, and verify forensic evidence before approving production deployments.
+      </p>
+    </div>
+    <div class="d-flex gap-8 items-center">
+      <span class="badge {% if high_priority_alerts | length == 0 %}badge-ok{% else %}badge-critical{% endif %}" style="font-size:0.95rem;padding:8px 14px">
+        {% if high_priority_alerts | length == 0 %}
+          ✅ All Pre-Release Checks Passing
+        {% else %}
+          🚨 {{ high_priority_alerts | length }} High-Priority Regressions Blocking
+        {% endif %}
+      </span>
+    </div>
+  </div>
+
+  <div class="stats-grid mt-16" style="grid-template-columns: repeat(4, 1fr); gap: 14px;">
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Candidate Release</div>
+      <div class="stat-value" style="font-size:1.4rem;color:var(--accent)">{{ candidate_release or 'v1.1.0' }}</div>
+      <div class="text-xs text-dim mt-4">Target for deployment</div>
+    </div>
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Pre-Release Baseline</div>
+      <div class="stat-value" style="font-size:1.4rem;color:var(--text-muted)">{{ baseline_release or 'v1.0.0' }}</div>
+      <div class="text-xs text-dim mt-4">Verified golden baseline</div>
+    </div>
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Latency Change vs Baseline</div>
+      <div class="stat-value {% if avg_time_change_pct > 20 %}critical{% else %}ok{% endif %}" style="font-size:1.4rem">
+        +{{ '%.1f' % (avg_time_change_pct or 0.0) }}%
+      </div>
+      <div class="text-xs text-dim mt-4">Aggregate canary query delta</div>
+    </div>
+    <div class="stat-card" style="padding:14px;background:var(--bg-card)">
+      <div class="text-xs text-dim mb-4">Double-Booking Risk Regressions</div>
+      <div class="stat-value {% if double_booking_hazards > 0 %}critical{% else %}ok{% endif %}" style="font-size:1.4rem">
+        {{ double_booking_hazards or 0 }}
+      </div>
+      <div class="text-xs text-dim mt-4">Critical slot race hazards</div>
+    </div>
+  </div>
+</div>
+
+<!-- 1. Release Approval / Rejection Gate -->
+<div class="card mb-24" style="border: 1px solid var(--border); border-left: 4px solid {% if high_priority_alerts %}var(--critical){% else %}var(--ok){% endif %};">
+  <div class="d-flex justify-between items-center mb-16">
+    <div>
+      <div class="card-title" style="margin:0">🔒 Deployment Sign-off Gate</div>
+      <div class="text-xs text-dim mt-2">Formal sign-off required prior to production deployment</div>
+    </div>
+    <span class="badge {% if high_priority_alerts %}badge-critical{% else %}badge-ok{% endif %}">
+      Gate Status: {% if high_priority_alerts %}REJECT RECOMMENDED{% else %}READY TO APPROVE{% endif %}
+    </span>
+  </div>
+
+  <form method="POST" action="{{ url_for('submit_release_decision') }}" class="d-flex gap-16" style="flex-direction:column">
+    <input type="hidden" name="candidate_release" value="{{ candidate_release or 'v1.1.0' }}">
+    <div class="grid-2" style="gap:16px">
+      <div>
+        <label class="text-xs text-dim fw-600 mb-6 block">Decision Action</label>
+        <select name="decision" class="form-control" style="background:var(--bg-card2);color:var(--text-bright);padding:10px;border-radius:6px;border:1px solid var(--border);width:100%">
+          {% if high_priority_alerts %}
+          <option value="REJECTED" selected>❌ REJECT & BLOCK RELEASE (Evidence of critical performance regression)</option>
+          <option value="CONDITIONAL_OVERRIDE">⚠️ CONDITIONAL OVERRIDE (Require senior emergency sign-off)</option>
+          <option value="APPROVED">✅ APPROVE DEPLOYMENT (Acknowledge and proceed)</option>
+          {% else %}
+          <option value="APPROVED" selected>✅ APPROVE DEPLOYMENT (All query performance checks passed)</option>
+          <option value="REJECTED">❌ REJECT RELEASE</option>
+          {% endif %}
+        </select>
+      </div>
+      <div>
+        <label class="text-xs text-dim fw-600 mb-6 block">Reviewer Justification Note</label>
+        <input type="text" name="justification" class="form-control" placeholder="Provide operational justification note for audit log..." required
+               style="background:var(--bg-card2);color:var(--text-bright);padding:10px;border-radius:6px;border:1px solid var(--border);width:100%"
+               value="{% if high_priority_alerts %}Pre-release canary run exhibits query regression with high/critical severity. Blocking deployment until index and plan are remediated.{% else %}All probe queries met latency and plan stability SLA criteria.{% endif %}">
+      </div>
+    </div>
+    <div class="d-flex justify-between items-center pt-8">
+      <span class="text-xs text-dim">Reviewer: <strong>{{ current_user().display_name }}</strong> ({{ current_user().role }})</span>
+      <button type="submit" class="btn {% if high_priority_alerts %}btn-danger{% else %}btn-primary{% endif %}" style="padding:8px 20px">
+        Submit Release Governance Decision ➔
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- 2. High-Priority Alerts Before Release -->
+<div class="card mb-24">
+  <div class="d-flex justify-between items-center mb-16">
+    <div>
+      <div class="card-title" style="margin:0">🚨 High-Priority Alerts Pending Review</div>
+      <div class="text-xs text-dim mt-2">Active queries triggering high or critical severity rules under {{ candidate_release or 'v1.1.0' }}</div>
+    </div>
+    <span class="badge badge-critical">{{ high_priority_alerts | length }} Alerts</span>
+  </div>
+
+  {% if high_priority_alerts %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Query ID</th>
+          <th>Query Name</th>
+          <th>Severity</th>
+          <th>Pre-Release (p95)</th>
+          <th>Post-Release (p95)</th>
+          <th>Latency Δ</th>
+          <th>Cost Δ</th>
+          <th>Access Shift</th>
+          <th>Evidence & Impact</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for a in high_priority_alerts %}
+        <tr>
+          <td><span class="mono fw-700">{{ a.query_id }}</span></td>
+          <td class="fw-600 text-sm">
+            {{ a.query_label }}
+            {% if a.is_double_booking %}
+            <span class="badge badge-critical" style="font-size:0.6rem;margin-left:4px">ANTI DOUBLE-BOOK</span>
+            {% endif %}
+          </td>
+          <td><span class="badge badge-{{ a.severity | lower }}">{{ a.severity }}</span></td>
+          <td class="mono">{{ a.baseline_ms }} ms</td>
+          <td class="mono fw-700 text-danger">{{ a.current_ms }} ms</td>
+          <td class="mono text-danger">+{{ a.pct_change }}%</td>
+          <td class="mono">+{{ a.cost_pct or 0 }}%</td>
+          <td class="text-xs text-muted">{{ a.plan_summary }}</td>
+          <td class="text-xs text-muted" style="max-width:280px">{{ a.reason }}</td>
+          <td>
+            <a href="{{ url_for('query_detail', query_id=a.query_id) }}" class="btn btn-secondary btn-sm">Inspect Evidence</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div style="text-align:center;padding:30px;color:var(--text-dim)">
+    <div style="font-size:2rem;margin-bottom:8px">🎉</div>
+    <p>Zero high or critical priority alerts pending. Release meets performance SLA criteria.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- 3. Release-Wise Performance Comparison -->
+<div class="card mb-24">
+  <div class="card-title mb-12">📊 Release-Wise Performance Comparison Matrix</div>
+  <p class="text-xs text-muted mb-16">
+    Chronological progression of probe query performance, average execution time, cost shift, and regression counts across releases.
+  </p>
+
+  {% if release_matrix %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Release Tag</th>
+          <th>Release Stage / Change</th>
+          <th>Queries Run</th>
+          <th>Avg Execution Time</th>
+          <th>Latency Δ vs Baseline</th>
+          <th>Cost Δ</th>
+          <th>Regressions Flagged</th>
+          <th>High/Critical Alerts</th>
+          <th>Release Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in release_matrix %}
+        <tr {% if r.release_tag == candidate_release %}style="background:rgba(99,102,241,0.06);font-weight:600"{% endif %}>
+          <td><span class="mono fw-700">{{ r.release_tag }}</span></td>
+          <td class="text-sm text-muted">{{ r.description }}</td>
+          <td class="mono">{{ r.query_count }}</td>
+          <td class="mono">{{ '%.2f' % r.avg_exec_ms }} ms</td>
+          <td class="mono {% if r.latency_delta_pct > 20 %}text-danger{% elif r.latency_delta_pct < 0 %}text-ok{% endif %}">
+            {% if r.latency_delta_pct > 0 %}+{% endif %}{{ '%.1f' % r.latency_delta_pct }}%
+          </td>
+          <td class="mono">
+            {% if r.cost_delta_pct > 0 %}+{% endif %}{{ '%.1f' % r.cost_delta_pct }}%
+          </td>
+          <td>
+            <span class="badge {% if r.regressions > 0 %}badge-warning{% else %}badge-ok{% endif %}">
+              {{ r.regressions }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if r.criticals > 0 %}badge-critical{% else %}badge-ok{% endif %}">
+              {{ r.criticals }}
+            </span>
+          </td>
+          <td>
+            {% if r.criticals > 0 %}
+            <span class="badge badge-critical">BLOCKED</span>
+            {% elif r.regressions > 0 %}
+            <span class="badge badge-warning">FLAGGED</span>
+            {% else %}
+            <span class="badge badge-ok">APPROVED</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-dim text-sm">No release matrix data gathered yet.</p>
+  {% endif %}
+</div>
+
+<!-- 4. Governance Audit Trail -->
+<div class="card">
+  <div class="card-title mb-12">📜 Release Governance Decision Audit Trail</div>
+  {% if decisions %}
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Release</th>
+          <th>Reviewer</th>
+          <th>Role</th>
+          <th>Decision</th>
+          <th>Justification Note</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in decisions %}
+        <tr>
+          <td class="text-xs text-dim mono">{{ d.timestamp[:19] }}</td>
+          <td><span class="mono fw-700">{{ d.release_tag }}</span></td>
+          <td class="text-sm">{{ d.reviewer_user }}</td>
+          <td><span class="badge badge-low">{{ d.reviewer_role }}</span></td>
+          <td>
+            <span class="badge {% if d.decision == 'APPROVED' %}badge-ok{% elif d.decision == 'REJECTED' %}badge-critical{% else %}badge-warning{% endif %}">
+              {{ d.decision }}
+            </span>
+          </td>
+          <td class="text-xs text-muted">{{ d.justification }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p class="text-dim text-sm">No release governance decisions recorded yet.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

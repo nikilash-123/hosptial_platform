@@ -69,6 +69,18 @@ def get_demo_users() -> Dict[str, Dict[str, Any]]:
             "role": "release_engineer",
             "display_name": "Engineering Reviewer",
         },
+        "release_manager": {
+            "user_id": "USR-REL-01",
+            "password": creds["reviewer_password"],
+            "role": "release_manager",
+            "display_name": "Release Manager",
+        },
+        "release_mgr": {
+            "user_id": "USR-REL-02",
+            "password": creds["reviewer_password"],
+            "role": "release_manager",
+            "display_name": "Release Manager",
+        },
     }
 
 
@@ -85,6 +97,8 @@ ROLE_ALIASES = {
     "release_engineer": "release_engineer",
     "reviewer": "release_engineer",
     "engineering_reviewer": "release_engineer",
+    "release_manager": "release_manager",
+    "release_mgr": "release_manager",
 }
 
 

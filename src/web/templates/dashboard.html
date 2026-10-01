@@ -48,11 +48,45 @@
   </div>
 </div>
 
-<!-- 2. Comprehensive 12-Stat Overview Grid -->
+<!-- 2. Comprehensive Performance Telemetry Grid -->
+<div class="stats-grid mb-16" style="grid-template-columns: repeat(4, 1fr); gap: 12px;">
+  <div class="stat-card" style="padding:14px;background:var(--bg-card);border-left:3px solid var(--accent)">
+    <div class="text-xs text-dim mb-4">Average Execution Time</div>
+    <div class="stat-value" style="font-size:1.5rem;color:var(--accent)">{{ metrics.average_execution_time }} ms</div>
+    <div class="text-xs text-dim mt-4">Mean across monitored probe queries</div>
+  </div>
+  <div class="stat-card" style="padding:14px;background:var(--bg-card);border-left:3px solid var(--critical)">
+    <div class="text-xs text-dim mb-4">Execution Time Change</div>
+    <div class="stat-value text-danger" style="font-size:1.5rem">+{{ metrics.execution_time_change_pct }}%</div>
+    <div class="text-xs text-dim mt-4">Average latency drift vs baseline</div>
+  </div>
+  <div class="stat-card" style="padding:14px;background:var(--bg-card);border-left:3px solid var(--warning)">
+    <div class="text-xs text-dim mb-4">Query Plan Cost Change</div>
+    <div class="stat-value text-warning" style="font-size:1.5rem">+{{ metrics.query_cost_change_pct }}%</div>
+    <div class="text-xs text-dim mt-4">Optimizer estimated cost surge</div>
+  </div>
+  <div class="stat-card" style="padding:14px;background:var(--bg-card);border-left:3px solid var(--ok)">
+    <div class="text-xs text-dim mb-4">Index-Related Regressions</div>
+    <div class="stat-value {% if metrics.index_related_issues > 0 %}text-danger{% else %}ok{% endif %}" style="font-size:1.5rem">
+      {{ metrics.index_related_issues }}
+    </div>
+    <div class="text-xs text-dim mt-4">Missing indexes or sequential scans</div>
+  </div>
+</div>
+
+<!-- 2b. Comprehensive Operational Metrics Grid -->
 <div class="stats-grid mb-24" style="grid-template-columns: repeat(6, 1fr); gap: 12px;">
   <div class="stat-card" style="padding:12px">
     <div class="stat-value" style="font-size:1.4rem;color:var(--accent)">{{ metrics.total_queries_analysed }}</div>
     <div class="stat-label">Total Queries</div>
+  </div>
+  <div class="stat-card" style="padding:12px">
+    <div class="stat-value text-danger" style="font-size:1.4rem">{{ metrics.total_regressions }}</div>
+    <div class="stat-label">Total Regressions</div>
+  </div>
+  <div class="stat-card critical" style="padding:12px">
+    <div class="stat-value critical" style="font-size:1.4rem">{{ metrics.high_priority_regressions }}</div>
+    <div class="stat-label">High Priority</div>
   </div>
   <div class="stat-card ok" style="padding:12px">
     <div class="stat-value ok" style="font-size:1.4rem">{{ metrics.normal_count }}</div>
@@ -61,14 +95,6 @@
   <div class="stat-card medium" style="padding:12px">
     <div class="stat-value medium" style="font-size:1.4rem">{{ metrics.warning_count }}</div>
     <div class="stat-label">Warnings</div>
-  </div>
-  <div class="stat-card high" style="padding:12px">
-    <div class="stat-value high" style="font-size:1.4rem">{{ metrics.high_regressions }}</div>
-    <div class="stat-label">High Regressions</div>
-  </div>
-  <div class="stat-card critical" style="padding:12px">
-    <div class="stat-value critical" style="font-size:1.4rem">{{ metrics.critical_regressions }}</div>
-    <div class="stat-label">Critical Regressions</div>
   </div>
   <div class="stat-card ok" style="padding:12px">
     <div class="stat-value ok" style="font-size:1.4rem">{{ '%.1f' % metrics.detection_rate }}%</div>
@@ -240,6 +266,77 @@
     {% else %}
     <p class="text-dim text-sm" style="margin-top:12px">No releases captured yet. Run <code>python src/detector.py baseline --release v1.0</code></p>
     {% endif %}
+  </div>
+</div>
+
+<!-- 4b. Regressions Breakdown: By Release & By Query -->
+<div class="grid-2 mb-24">
+  <!-- Regressions by Release -->
+  <div class="card">
+    <div class="card-title mb-12">📦 Regressions by Release Version</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Release Version</th>
+            <th>Regression Count</th>
+            <th>Relative Impact</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for rel, count in metrics.regressions_by_release.items() %}
+          <tr>
+            <td><span class="mono fw-700">{{ rel }}</span></td>
+            <td>
+              <span class="badge {% if count > 2 %}badge-critical{% elif count > 0 %}badge-warning{% else %}badge-ok{% endif %}">
+                {{ count }} regressions
+              </span>
+            </td>
+            <td>
+              <div style="background:var(--bg-card2);border-radius:4px;height:8px;width:100%;overflow:hidden">
+                <div style="background:{% if count > 2 %}var(--critical){% else %}var(--warning){% endif %};height:100%;width:{{ [count * 25, 100] | min }}%"></div>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Regressions by Query Template -->
+  <div class="card">
+    <div class="card-title mb-12">🔍 Regressions by Query Template</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Query Identifier</th>
+            <th>Incidents</th>
+            <th>Risk Profile</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for qid, count in metrics.regressions_by_query.items() %}
+          <tr>
+            <td><span class="mono fw-700">{{ qid }}</span></td>
+            <td>
+              <span class="badge {% if count > 2 %}badge-critical{% else %}badge-warning{% endif %}">
+                {{ count }} flagged
+              </span>
+            </td>
+            <td>
+              {% if qid in ('QRY-001', 'QRY-004', 'SYNTH-Q-002', 'SYNTH-Q-004') %}
+              <span class="badge badge-critical" style="font-size:0.6rem">ANTI DOUBLE-BOOK</span>
+              {% else %}
+              <span class="badge badge-low" style="font-size:0.6rem">STANDARD SLA</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </div>
 </div>
 

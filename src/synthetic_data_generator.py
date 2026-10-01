@@ -66,32 +66,61 @@ def create_schema(conn: sqlite3.Connection) -> None:
             is_active  INTEGER NOT NULL DEFAULT 1
         );
 
+        CREATE TABLE IF NOT EXISTS appointment_slots (
+            slot_id         TEXT PRIMARY KEY,
+            doctor_id       TEXT NOT NULL REFERENCES doctors(doctor_id),
+            dept_id         TEXT NOT NULL REFERENCES departments(dept_id),
+            slot_date       TEXT NOT NULL,
+            slot_time       TEXT NOT NULL,
+            duration_mins   INTEGER NOT NULL DEFAULT 30,
+            is_available    INTEGER NOT NULL DEFAULT 1,
+            release_version TEXT NOT NULL DEFAULT 'v1.0',
+            schema_version  TEXT NOT NULL DEFAULT 'v1.0'
+        );
+
         CREATE TABLE IF NOT EXISTS appointments (
-            appt_id       TEXT PRIMARY KEY,
-            patient_id    TEXT NOT NULL REFERENCES patients(patient_id),
-            doctor_id     TEXT NOT NULL REFERENCES doctors(doctor_id),
-            dept_id       TEXT NOT NULL REFERENCES departments(dept_id),
-            appt_date     TEXT NOT NULL,
-            appt_time     TEXT NOT NULL,
-            duration_mins INTEGER NOT NULL,
-            status        TEXT NOT NULL DEFAULT 'SCHEDULED',
-            created_at    DATETIME NOT NULL,
-            updated_at    DATETIME NOT NULL
+            appt_id           TEXT PRIMARY KEY,
+            patient_id        TEXT NOT NULL REFERENCES patients(patient_id),
+            doctor_id         TEXT NOT NULL REFERENCES doctors(doctor_id),
+            dept_id           TEXT NOT NULL REFERENCES departments(dept_id),
+            slot_id           TEXT,
+            appt_date         TEXT NOT NULL,
+            appt_time         TEXT NOT NULL,
+            duration_mins     INTEGER NOT NULL,
+            status            TEXT NOT NULL DEFAULT 'SCHEDULED',
+            transaction_id    TEXT,
+            release_version   TEXT NOT NULL DEFAULT 'v1.0',
+            schema_version    TEXT NOT NULL DEFAULT 'v1.0',
+            booking_timestamp DATETIME NOT NULL,
+            created_at        DATETIME NOT NULL,
+            updated_at        DATETIME NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS transaction_log (
+            txn_id          TEXT PRIMARY KEY,
+            appt_id         TEXT,
+            doctor_id       TEXT,
+            action          TEXT NOT NULL,
+            isolation_level TEXT NOT NULL DEFAULT 'READ COMMITTED',
+            status          TEXT NOT NULL,
+            duration_ms     REAL,
+            created_at      DATETIME NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS audit_log (
-            log_id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_type  TEXT NOT NULL,
-            description TEXT NOT NULL,
-            release_tag TEXT NOT NULL DEFAULT 'v1.0',
-            applied_at  DATETIME NOT NULL
+            log_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type     TEXT NOT NULL,
+            description    TEXT NOT NULL,
+            release_tag    TEXT NOT NULL DEFAULT 'v1.0',
+            schema_version TEXT NOT NULL DEFAULT 'v1.0',
+            applied_at     DATETIME NOT NULL
         );
     """)
     conn.commit()
 
 
 def create_indexes(conn: sqlite3.Connection) -> None:
-    """Create the baseline index set."""
+    """Create the baseline index set including anti double-booking constraint."""
     cur = conn.cursor()
     indexes = [
         "CREATE INDEX IF NOT EXISTS idx_appt_doctor_date ON appointments(doctor_id, appt_date);",
@@ -100,6 +129,8 @@ def create_indexes(conn: sqlite3.Connection) -> None:
         "CREATE INDEX IF NOT EXISTS idx_appt_dept_date   ON appointments(dept_id, appt_date);",
         "CREATE INDEX IF NOT EXISTS idx_appt_date        ON appointments(appt_date);",
         "CREATE INDEX IF NOT EXISTS idx_doctors_dept     ON doctors(dept_id);",
+        "CREATE INDEX IF NOT EXISTS idx_slots_doc_date_avail ON appointment_slots(doctor_id, slot_date, is_available);",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_prevent_double_booking ON appointments(doctor_id, appt_date, appt_time) WHERE status = 'SCHEDULED';",
     ]
     for sql in indexes:
         cur.execute(sql)
@@ -157,6 +188,38 @@ def seed_patients(conn: sqlite3.Connection, count: int = 5000) -> list:
     return patients
 
 
+def seed_appointment_slots(
+    conn: sqlite3.Connection,
+    doctors: list,
+    depts: list,
+    days_ahead: int = 30
+) -> list:
+    """Generate reproducible appointment slots for active doctors."""
+    cur = conn.cursor()
+    slots = []
+    base_date = date(2026, 9, 1)
+    
+    for day_offset in range(days_ahead):
+        cur_date = (base_date + timedelta(days=day_offset)).isoformat()
+        for doc_id in doctors[:15]:  # Active primary schedule
+            dept_num = (int(doc_id.split("-")[2]) - 1) % len(depts)
+            dept_id = depts[dept_num]
+            for slot_time in TIME_SLOTS[::2]:  # every 30 mins
+                slot_id = f"SYNTH-SLOT-{cur_date.replace('-', '')}-{doc_id.split('-')[2]}-{slot_time.replace(':', '')}"
+                slots.append((
+                    slot_id, doc_id, dept_id, cur_date, slot_time, 30, 1, "v1.0", "v1.0"
+                ))
+
+    cur.executemany(
+        """INSERT OR IGNORE INTO appointment_slots (
+            slot_id, doctor_id, dept_id, slot_date, slot_time, duration_mins, is_available, release_version, schema_version
+        ) VALUES (?,?,?,?,?,?,?,?,?)""",
+        slots
+    )
+    conn.commit()
+    return slots
+
+
 def seed_appointments(
     conn: sqlite3.Connection,
     patients: list,
@@ -183,13 +246,22 @@ def seed_appointments(
         duration = random.choice(DURATIONS)
         status = random.choices(STATUSES, weights=STATUS_WEIGHTS)[0]
         now = datetime.now().isoformat()
+        txn_id = f"SYNTH-TXN-{i:06d}"
+        slot_id = f"SYNTH-SLOT-{appt_date.replace('-', '')}-{doctor_id.split('-')[2]}-{appt_time.replace(':', '')}"
 
-        rows.append((appt_id, patient_id, doctor_id, dept_id,
-                     appt_date, appt_time, duration, status, now, now))
+        rows.append((
+            appt_id, patient_id, doctor_id, dept_id, slot_id,
+            appt_date, appt_time, duration, status, txn_id,
+            "v1.0", "v1.0", now, now, now
+        ))
 
         if len(rows) == 1000:
             cur.executemany(
-                "INSERT OR IGNORE INTO appointments VALUES (?,?,?,?,?,?,?,?,?,?)",
+                """INSERT OR IGNORE INTO appointments (
+                    appt_id, patient_id, doctor_id, dept_id, slot_id,
+                    appt_date, appt_time, duration_mins, status, transaction_id,
+                    release_version, schema_version, booking_timestamp, created_at, updated_at
+                ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 rows
             )
             conn.commit()
@@ -197,7 +269,11 @@ def seed_appointments(
 
     if rows:
         cur.executemany(
-            "INSERT OR IGNORE INTO appointments VALUES (?,?,?,?,?,?,?,?,?,?)",
+            """INSERT OR IGNORE INTO appointments (
+                appt_id, patient_id, doctor_id, dept_id, slot_id,
+                appt_date, appt_time, duration_mins, status, transaction_id,
+                release_version, schema_version, booking_timestamp, created_at, updated_at
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
             rows
         )
         conn.commit()
@@ -209,10 +285,10 @@ def run_analyze(conn: sqlite3.Connection) -> None:
     conn.commit()
 
 
-def log_event(conn: sqlite3.Connection, event_type: str, description: str, release: str = "v1.0") -> None:
+def log_event(conn: sqlite3.Connection, event_type: str, description: str, release: str = "v1.0", schema: str = "v1.0") -> None:
     conn.execute(
-        "INSERT INTO audit_log(event_type, description, release_tag, applied_at) VALUES (?,?,?,?)",
-        (event_type, description, release, datetime.now().isoformat())
+        "INSERT INTO audit_log(event_type, description, release_tag, schema_version, applied_at) VALUES (?,?,?,?,?)",
+        (event_type, description, release, schema, datetime.now().isoformat())
     )
     conn.commit()
 
@@ -234,6 +310,9 @@ def main(db_path: str = DB_PATH, appointment_count: int = 50000) -> None:
     print("[GENERATOR] Seeding doctors (30)...")
     doctors = seed_doctors(conn, depts)
 
+    print(f"[GENERATOR] Seeding appointment slots...")
+    seed_appointment_slots(conn, doctors, depts)
+
     print(f"[GENERATOR] Seeding patients (5 000)...")
     patients = seed_patients(conn)
 
@@ -247,7 +326,7 @@ def main(db_path: str = DB_PATH, appointment_count: int = 50000) -> None:
     run_analyze(conn)
 
     log_event(conn, "DATA_LOAD", f"Initial synthetic data load: {appointment_count} appointments", "v1.0")
-    log_event(conn, "INDEX_ADD", "Created baseline index set (6 indexes)", "v1.0")
+    log_event(conn, "INDEX_ADD", "Created baseline index set (8 indexes with anti double-booking unique index)", "v1.0")
 
     row_count = conn.execute("SELECT COUNT(*) FROM appointments").fetchone()[0]
     db_size = os.path.getsize(db_path) / (1024 * 1024)

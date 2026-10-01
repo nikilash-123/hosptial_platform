@@ -36,9 +36,11 @@ thresholds:
 
   # Query plan cost increase threshold (%)
   plan_cost_increase_percent: 30.0
+  execution_cost_increase_percent: 30.0
 
   # Estimated rows / cardinality drift threshold (%)
   estimated_rows_increase_threshold: 50.0
+  actual_rows_increase_threshold: 50.0
 
   # Index scan degradation threshold (%)
   index_scan_degradation_threshold: 20.0

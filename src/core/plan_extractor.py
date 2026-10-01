@@ -7,26 +7,25 @@ structured plan nodes. Detects index usage and SCAN vs SEARCH access patterns.
 
 import sqlite3
 import re
-from typing import List, Dict, Any, Tuple
+import json
+from typing import List, Dict, Any, Tuple, Union
 
 
-def extract_plan(conn: sqlite3.Connection, sql: str) -> Dict[str, Any]:
+def extract_plan(conn: Any, sql: str, analyze: bool = False) -> Dict[str, Any]:
     """
-    Run EXPLAIN QUERY PLAN and return a structured plan dict.
-
-    Returns:
-        {
-          "raw": str,               # raw EXPLAIN output lines
-          "nodes": list[dict],      # parsed plan nodes
-          "uses_index": bool,       # True if any index is used
-          "index_names": list[str], # list of index names referenced
-          "has_full_scan": bool,    # True if any SCAN (no index) found
-          "row_est": int,           # estimated rows from EXPLAIN (best-effort)
-        }
+    Run EXPLAIN (or EXPLAIN ANALYZE) and return a structured plan dict.
+    Supports both PostgreSQL connections (psycopg2) and SQLite connections (sqlite3).
     """
+    # 1. Check if conn is a PostgreSQL connection
+    conn_type_str = str(type(conn)).lower()
+    if "psycopg" in conn_type_str or hasattr(conn, "get_backend_pid"):
+        from src.core import postgres_engine
+        return postgres_engine.extract_postgres_plan(conn, sql, analyze=analyze)
+
+    # 2. SQLite EXPLAIN QUERY PLAN
     try:
         rows = conn.execute(f"EXPLAIN QUERY PLAN {sql}").fetchall()
-    except sqlite3.Error as e:
+    except Exception as e:
         return _error_plan(str(e))
 
     nodes = []
